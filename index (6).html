@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TVL First Part Inspection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --ink:#1b2733; --muted:#5b6b7b; --line:#9fb0c1; --hair:#ccd6e0;
+  --bg:#dde4ea; --panel:#f5f7f9; --paper:#fff;
+  --blue:#1f4f7a; --blue2:#e6eef6;
+  --ok:#1d7a3b; --okbg:#e3f3e8; --nok:#b42318; --nokbg:#fbe4e1; --warn:#9a5a00;
+  --ui:'Barlow',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  --tab:'Barlow Semi Condensed','Arial Narrow',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--ui);color:var(--ink);background:var(--bg);font-size:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+
+.app{display:grid;grid-template-columns:310px 1fr;min-height:100%}
+aside{background:var(--panel);border-right:1px solid var(--hair);padding:18px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px}
+.brand b{display:grid;place-items:center;width:40px;height:40px;border:2px solid var(--blue);color:var(--blue);font-weight:700;letter-spacing:.5px}
+.brand h1{font-size:17px;margin:0;line-height:1.15}
+.brand small{color:var(--muted);font-size:12px}
+.grp{display:flex;flex-direction:column;gap:8px}
+.grp h2{font-size:13px;margin:0;color:var(--blue);font-weight:600}
+.drop{border:1.5px dashed var(--line);background:#fff;padding:14px;text-align:center;cursor:pointer;border-radius:4px;color:var(--muted)}
+.drop.over{border-color:var(--blue);background:var(--blue2)}
+.drop strong{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
+#preview{width:100%;border:1px solid var(--hair);background:#fff;display:none;max-height:360px;object-fit:contain}
+.btn{border:1px solid var(--blue);background:var(--blue);color:#fff;padding:9px 12px;border-radius:4px;cursor:pointer;font-weight:600;text-align:center}
+.btn.ghost{background:#fff;color:var(--blue)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+select.fld,input.fld{width:100%;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.note{font-size:12px;color:var(--muted);line-height:1.4}
+#status{font-size:12.5px;line-height:1.4;min-height:18px}
+#status.err{color:var(--nok)} #status.ok{color:var(--ok)}
+.foot{margin-top:auto;display:flex;gap:8px}
+
+main{padding:24px;overflow:auto}
+.sheet{background:var(--paper);width:100%;max-width:1180px;margin:0 auto;padding:14px 16px;box-shadow:0 1px 0 var(--hair),0 8px 24px rgba(27,39,51,.08)}
+.empty{max-width:1180px;margin:60px auto;text-align:center;color:var(--muted)}
+.empty h3{color:var(--ink);font-size:20px;margin:0 0 6px}
+
+/* report */
+table{border-collapse:collapse;width:100%}
+.tb td{border:1px solid var(--ink);padding:3px 6px;font-size:12.5px;vertical-align:middle}
+.tb .co{font-weight:700;font-size:17px;letter-spacing:.3px}
+.tb .title{font-weight:700;font-size:16px;text-align:center}
+.tb .lbl{color:var(--muted);font-size:11px;white-space:nowrap;width:1%}
+.tb input,.tb select{border:0;background:transparent;width:100%;padding:1px 0;font-weight:600}
+.tb input:hover,.tb select:hover{background:var(--blue2)}
+.gt{margin-top:6px;font-size:11.5px;color:var(--muted)}
+.gt span{margin-right:12px}
+
+.dt{margin-top:8px;font-family:var(--tab);table-layout:fixed}
+.dt th,.dt td{border:1px solid var(--ink);padding:0 3px;font-size:12.5px;height:24px}
+.dt thead th{background:var(--blue2);font-weight:600;text-align:center;line-height:1.1;padding:3px}
+.dt td{text-align:center}
+.dt td.l{text-align:left}
+.dt input{width:100%;border:0;background:transparent;text-align:center;padding:2px 0;font-family:var(--tab);font-size:12.5px}
+.dt td.l input{text-align:left}
+.dt input:hover{background:var(--blue2)}
+.dt input:focus{background:#fffbe0;outline:1px solid var(--blue)}
+.dt .s.ok{background:var(--okbg);color:var(--ok);font-weight:600}
+.dt .s.nok{background:var(--nokbg);color:var(--nok);font-weight:700}
+.dt .res{font-weight:700}
+.dt .res.ok{color:var(--ok)} .dt .res.nok{color:var(--nok);background:var(--nokbg)}
+.dt .calc{color:var(--muted)}
+.dt .ref{color:var(--warn)}
+.dt .box{outline:1.2px solid var(--ink);outline-offset:-3px}
+.dt .view{display:block;font-size:10px;color:var(--muted);line-height:1}
+.dt .del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 4px}
+.dt .del:hover{color:var(--nok)}
+.dt tr.grp td{background:#f1f4f7;font-weight:600;text-align:left;font-size:11.5px;height:20px}
+.tools{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.tools .btn{padding:6px 10px;font-size:13px}
+
+.sum{display:grid;grid-template-columns:1.2fr 2fr;gap:0;margin-top:8px}
+.sum>div{border:1px solid var(--ink);padding:6px 8px;font-size:12.5px}
+.sum>div+div{border-left:0}
+.dec{font-size:18px;font-weight:700;letter-spacing:.4px}
+.dec.ok{color:var(--ok)} .dec.nok{color:var(--nok)} .dec.pend{color:var(--warn)}
+.sum textarea{width:100%;border:0;resize:vertical;min-height:34px;font-size:12.5px;background:transparent}
+.sig{display:grid;grid-template-columns:repeat(3,1fr);margin-top:0}
+.sig div{border:1px solid var(--ink);border-top:0;padding:30px 8px 5px;font-size:12px;text-align:center}
+.sig div+div{border-left:0}
+.legend{font-size:10.5px;color:var(--muted);margin-top:4px}
+
+.busy{position:fixed;inset:0;background:rgba(221,228,234,.82);display:none;place-items:center;z-index:50}
+.busy.on{display:grid}
+.busy div{background:#fff;border:1px solid var(--hair);padding:22px 28px;text-align:center;max-width:340px}
+.spin{width:34px;height:34px;border:3px solid var(--blue2);border-top-color:var(--blue);border-radius:50%;margin:0 auto 10px;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+
+dialog{border:1px solid var(--hair);padding:18px;width:min(460px,92vw)}
+dialog::backdrop{background:rgba(27,39,51,.4)}
+dialog label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto}
+  main{padding:10px}
+  .sheet{overflow-x:auto}
+  .dt{min-width:980px}
+}
+
+@page{size:A4 landscape;margin:7mm}
+@media print{
+  body{background:#fff}
+  .app{display:block}
+  aside,.tools,.noprint,.dt .del,.busy,dialog{display:none!important}
+  main{padding:0;overflow:visible}
+  .sheet{box-shadow:none;padding:0;max-width:none}
+  .dt th,.dt td{font-size:9.5pt;height:6.2mm}
+  .dt input,.tb input,.tb select{font-size:9.5pt}
+  .dt thead{display:table-header-group}
+  .dt tr{page-break-inside:avoid}
+  .sum,.sig{page-break-inside:avoid}
+  .tb select{appearance:none;-webkit-appearance:none}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><b>TVL</b><div><h1>First Part Inspection</h1><small>Drawing to 5-sample FPI report</small></div></div>
+
+    <div class="grp">
+      <h2>1. Drawing</h2>
+      <label class="drop" id="drop">
+        <strong>Upload drawing</strong>PDF, PNG or JPG (A4 scan)
+        <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden>
+      </label>
+      <canvas id="pdfCanvas" style="display:none;width:100%;border:1px solid var(--hair)"></canvas>
+      <img id="preview" alt="Drawing preview">
+      <button class="btn" id="btnExtract" disabled>Read dimensions</button>
+      <div class="note">AI reads every dimension. Check each row before measuring.</div>
+    </div>
+
+    <div class="grp">
+      <h2>2. Saved drawings</h2>
+      <select class="fld" id="masterSel"><option value="">Select drawing no.</option></select>
+      <div class="row2">
+        <button class="btn ghost" id="btnLoadMaster">Load</button>
+        <button class="btn ghost" id="btnSaveMaster" disabled>Save list</button>
+      </div>
+      <div class="note">Save the checked dimension list once. Next FPI of the same part loads instantly, no AI call.</div>
+    </div>
+
+    <div class="grp">
+      <h2>3. Report</h2>
+      <div class="row2">
+        <button class="btn" id="btnPrint" disabled>Print</button>
+        <button class="btn ghost" id="btnSave" disabled>Save to sheet</button>
+      </div>
+      <button class="btn ghost" id="btnNew" disabled>New report, same drawing</button>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="foot">
+      <button class="btn ghost" id="btnSettings" style="flex:1">Settings</button>
+      <button class="btn ghost" id="btnDemo" style="flex:1">Demo TVL-299/18</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="empty" id="empty">
+      <h3>Upload a drawing to start</h3>
+      <p>Or load a saved drawing number from the left panel.</p>
+    </div>
+    <div class="sheet" id="sheet" hidden></div>
+  </main>
+</div>
+
+<div class="busy" id="busy"><div><div class="spin"></div><b id="busyMsg">Reading drawing</b><div class="note">Usually 20 to 60 seconds</div></div></div>
+
+<dialog id="dlg">
+  <b>Settings</b>
+  <label for="cfgUrl">Apps Script web app URL</label>
+  <input class="fld" id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  <label for="cfgKey">Access key (APP_KEY, if set)</label>
+  <input class="fld" id="cfgKey" type="password">
+  <label for="cfgCo">Company name on report</label>
+  <input class="fld" id="cfgCo">
+  <label for="cfgFmt">Format no. on report</label>
+  <input class="fld" id="cfgFmt" placeholder="QA/F/..">
+  <div class="row2" style="margin-top:14px">
+    <button class="btn ghost" id="cfgTest">Test connection</button>
+    <button class="btn" id="cfgSave">Save</button>
+  </div>
+</dialog>
+
+<script>
+/* ================= Config ================= */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('tvlfpi_'+k); return v===null?d:v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('tvlfpi_'+k, v); }catch(e){} }
+};
+const CFG = {
+  url: LS.get('url',''), key: LS.get('key',''),
+  co: LS.get('co','TRANS VALVES (INDIA) PVT. LTD., HYDERABAD'),
+  fmt: LS.get('fmt','QA/F/FPI')
+};
+const DEF_GENTOL = [{from:0.5,to:3,tol:0.1},{from:3,to:6,tol:0.1},{from:6,to:30,tol:0.2},{from:30,to:120,tol:0.3}];
+const N = 5; // samples
+
+/* ================= State ================= */
+let FILE = null;              // {name, mime, b64}
+let S = null;                 // {header, genTol, angTol, dims:[], info:{}, remarks}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => { if(v===null||v===undefined||v==='') return null; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n)?null:n; };
+function status(msg, cls=''){ const s=$('status'); s.textContent=msg; s.className=cls; }
+function busy(on, msg){ $('busy').classList.toggle('on', on); if(msg) $('busyMsg').textContent = msg; }
+
+async function api(action, payload={}){
+  if(!CFG.url) throw new Error('Set the Apps Script URL in Settings first.');
+  const r = await fetch(CFG.url, { method:'POST', body: JSON.stringify(Object.assign({action, key:CFG.key}, payload)) });
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error || 'Request failed');
+  return j.data;
+}
+
+/* ================= File upload ================= */
+if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const drop = $('drop');
+['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+$('file').addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+function readB64(file){
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+}
+
+async function compressImage(file){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+  const max = 3000, sc = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = img.width*sc; c.height = img.height*sc;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url);
+  return c.toDataURL('image/jpeg', 0.9).split(',')[1];
+}
+
+async function handleFile(file){
+  const mime = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
+  if(!/^(application\/pdf|image\/(png|jpeg|webp))$/.test(mime)){ status('Upload a PDF, PNG or JPG file.', 'err'); return; }
+  if(file.size > 25*1024*1024){ status('File is over 25 MB. Scan at 200 to 300 dpi and try again.', 'err'); return; }
+  status('Loading '+file.name+'…');
+  let b64, m = mime;
+  if(mime.startsWith('image/') && file.size > 3.5*1024*1024){ b64 = await compressImage(file); m = 'image/jpeg'; }
+  else b64 = await readB64(file);
+  FILE = { name:file.name, mime:m, b64 };
+  $('btnExtract').disabled = false;
+  $('preview').style.display = 'none'; $('pdfCanvas').style.display = 'none';
+  if(m === 'application/pdf' && window.pdfjsLib){
+    try{
+      const pdf = await pdfjsLib.getDocument({data: Uint8Array.from(atob(b64), c => c.charCodeAt(0))}).promise;
+      const page = await pdf.getPage(1); const vp = page.getViewport({scale:0.6});
+      const cv = $('pdfCanvas'); cv.width = vp.width; cv.height = vp.height;
+      await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
+      cv.style.display = 'block';
+    }catch(e){ /* preview optional */ }
+  } else if(m.startsWith('image/')){
+    $('preview').src = 'data:'+m+';base64,'+b64; $('preview').style.display = 'block';
+  }
+  status(file.name+' ready. Press Read dimensions.', 'ok');
+}
+
+/* ================= Extraction ================= */
+$('btnExtract').onclick = async () => {
+  if(!FILE) return;
+  busy(true, 'Reading dimensions from drawing');
+  try{
+    const out = await api('extract', { fileBase64: FILE.b64, mimeType: FILE.mime, fileName: FILE.name });
+    loadData(out, true);
+    const refs = S.dims.filter(d => d.src==='-' && !d.attr).length;
+    status(`${S.dims.length} dimensions found. ${refs ? refs+' have no tolerance (shown amber). ' : ''}Check every row, then Save list.`, 'ok');
+  }catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+function genTolFor(v, gt){
+  const a = Math.abs(v), list = (gt && gt.length ? gt : DEF_GENTOL).slice().sort((x,y)=>x.from-y.from);
+  if(a < list[0].from) return list[0].tol;
+  const hit = list.find(r => a >= r.from && a <= r.to);
+  return hit ? hit.tol : list[list.length-1].tol;
+}
+
+function normDim(d, gt, angTol){
+  const type = String(d.type||'L').toUpperCase();
+  const nom = num(d.nom);
+  const attr = type==='T' || type==='N' || nom===null;
+  let up = num(d.up), lo = num(d.lo), src = 'E';
+  if(!attr && up===null && lo===null){
+    if(type==='A'){ if(angTol!=null){ up = angTol; lo = -angTol; src='G'; } else src='-'; }
+    else { const t = genTolFor(nom, gt); up = t; lo = -t; src='G'; }
+  }
+  if(attr) src='A';
+  let text = d.text || (nom!==null ? String(nom) : '');
+  if(type==='D' && text && !/^[Ø⌀]/.test(text)) text = 'Ø'+text;
+  if(type==='A' && text && !/°$/.test(text)) text += '°';
+  return { feat:d.feat||'', type, text, nom, up, lo, src, attr, boxed:!!d.boxed, view:d.view||'', inst:d.inst||'',
+           s: Array.isArray(d.s) ? d.s.slice(0,N).concat(Array(N).fill('')).slice(0,N) : Array(N).fill('') };
+}
+
+function newInfo(){
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return { reportNo:`FPI-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`,
+    date:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, customer:'', machine:'', operator:'', shift:'A',
+    inspector:'', lotQty:'', reason:'New setup', remarks:'' };
+}
+
+function loadData(data, fresh){
+  const gt = (data.genTol && data.genTol.length) ? data.genTol : DEF_GENTOL;
+  const angTol = num(data.angTol);
+  S = {
+    header: Object.assign({partName:'',drawingNo:'',revision:'',material:'',usedOn:''}, data.header||{}),
+    genTol: gt, angTol,
+    dims: (data.dims||[]).map(d => d.src ? Object.assign({}, d, {s:Array(N).fill('')}) : normDim(d, gt, angTol)),
+    info: newInfo()
+  };
+  render();
+}
+
+/* ================= Render ================= */
+function dec(...vals){ return Math.max(1, ...vals.filter(v=>v!==null).map(v => (String(v).split('.')[1]||'').length)); }
+function limits(d){
+  if(d.attr || d.nom===null || d.up===null || d.lo===null) return {lsl:null, usl:null, dp:1};
+  const dp = dec(d.nom, d.up, d.lo);
+  return { lsl:+(d.nom + d.lo).toFixed(dp), usl:+(d.nom + d.up).toFixed(dp), dp };
+}
+function judge(d, v){
+  if(v===''||v===null||v===undefined) return '';
+  if(d.attr){ const u = String(v).trim().toUpperCase(); return u==='OK' ? 'ok' : u==='NOK' ? 'nok' : ''; }
+  const x = num(v); const {lsl, usl} = limits(d);
+  if(x===null || lsl===null) return '';
+  return (x >= lsl - 1e-9 && x <= usl + 1e-9) ? 'ok' : 'nok';
+}
+function rowResult(d){
+  const j = d.s.map(v => judge(d, v));
+  if(j.includes('nok')) return 'NOK';
+  if(j.filter(x=>x==='ok').length === N) return 'OK';
+  return '';
+}
+const fmtTol = v => v===null ? '' : (v>0?'+':'') + v;
+
+function render(){
+  $('empty').hidden = true; $('sheet').hidden = false;
+  ['btnPrint','btnSave','btnSaveMaster','btnNew'].forEach(id => $(id).disabled = false);
+  const h = S.header, i = S.info;
+  const inp = (obj, k, extra='') => `<input data-o="${obj}" data-k="${k}" value="${esc((obj==='h'?h:i)[k])}" ${extra}>`;
+  const gtText = S.genTol.map(r => `<span>${r.from} to ${r.to} mm: ±${r.tol}</span>`).join('') + (S.angTol!=null?`<span>Angles: ±${S.angTol}°</span>`:'');
+
+  let html = `
+  <table class="tb">
+    <tr><td colspan="4" class="co">${esc(CFG.co)}</td><td colspan="2" class="title">FIRST PART INSPECTION REPORT</td>
+        <td class="lbl">Format</td><td>${esc(CFG.fmt)}</td></tr>
+    <tr><td class="lbl">Part name</td><td colspan="3">${inp('h','partName')}</td>
+        <td class="lbl">Report no.</td><td>${inp('i','reportNo')}</td><td class="lbl">Date</td><td>${inp('i','date','type="date"')}</td></tr>
+    <tr><td class="lbl">Drawing no.</td><td>${inp('h','drawingNo')}</td><td class="lbl">Rev.</td><td>${inp('h','revision')}</td>
+        <td class="lbl">Customer</td><td>${inp('i','customer')}</td><td class="lbl">Shift</td>
+        <td><select data-o="i" data-k="shift">${['A','B','C','General'].map(x=>`<option ${i.shift===x?'selected':''}>${x}</option>`).join('')}</select></td></tr>
+    <tr><td class="lbl">Material</td><td>${inp('h','material')}</td><td class="lbl">Used on</td><td>${inp('h','usedOn')}</td>
+        <td class="lbl">Machine</td><td>${inp('i','machine')}</td><td class="lbl">Lot qty</td><td>${inp('i','lotQty')}</td></tr>
+    <tr><td class="lbl">FPI reason</td><td colspan="3"><select data-o="i" data-k="reason">${['New setup','Tool change','Shift start','After breakdown','Material change','Program change'].map(x=>`<option ${i.reason===x?'selected':''}>${x}</option>`).join('')}</select></td>
+        <td class="lbl">Operator</td><td>${inp('i','operator')}</td><td class="lbl">Inspector</td><td>${inp('i','inspector')}</td></tr>
+  </table>
+  <div class="gt">General tolerance: ${gtText}</div>
+
+  <table class="dt" id="dt">
+    <colgroup><col style="width:3%"><col style="width:17%"><col style="width:9%"><col style="width:5%"><col style="width:5%">
+      <col style="width:6%"><col style="width:6%"><col style="width:11%">${'<col style="width:6.4%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:2%"></colgroup>
+    <thead><tr><th rowspan="2">Sr.</th><th rowspan="2">Characteristic</th><th rowspan="2">Nominal</th><th colspan="2">Tolerance</th>
+      <th rowspan="2">LSL</th><th rowspan="2">USL</th><th rowspan="2">Instrument</th><th colspan="${N}">Observed readings</th><th rowspan="2">Result</th><th rowspan="2" class="noprint"></th></tr>
+      <tr><th>+</th><th>−</th>${Array.from({length:N},(_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead>
+    <tbody>`;
+  let lastView = null;
+  S.dims.forEach((d, r) => {
+    if(d.view && d.view !== lastView){ html += `<tr class="grp"><td colspan="${9+N}">${esc(d.view)}</td><td class="noprint"></td></tr>`; lastView = d.view; }
+    html += rowHtml(d, r);
+  });
+  html += `</tbody></table>
+  <div class="legend">Boxed nominal = boxed on drawing. Amber limits = no tolerance on drawing, fill manually. Gauge rows: type OK or NOK.</div>
+  <div class="tools noprint">
+    <button class="btn ghost" id="addRow">Add row</button>
+    <button class="btn ghost" id="gaugeOk">Mark all gauge rows OK</button>
+  </div>
+  <div class="sum">
+    <div>Decision<div class="dec" id="decision"></div><div id="decNote" class="note"></div></div>
+    <div>Remarks<textarea data-o="i" data-k="remarks">${esc(i.remarks)}</textarea></div>
+  </div>
+  <div class="sig"><div>Operator</div><div>Inspected by (QA)</div><div>Approved by</div></div>`;
+  $('sheet').innerHTML = html;
+  bindSheet(); updateDecision();
+}
+
+function rowHtml(d, r){
+  const {lsl, usl} = limits(d);
+  const noTol = !d.attr && lsl===null;
+  const res = rowResult(d);
+  return `<tr data-r="${r}">
+    <td>${r+1}</td>
+    <td class="l"><input data-f="feat" value="${esc(d.feat)}"></td>
+    <td class="${d.boxed?'box':''}"><input data-f="text" value="${esc(d.text)}" title="Nominal as on drawing"></td>
+    <td>${d.attr?'':`<input data-f="up" value="${esc(fmtTol(d.up))}">`}</td>
+    <td>${d.attr?'':`<input data-f="lo" value="${esc(fmtTol(d.lo))}">`}</td>
+    <td class="calc ${noTol?'ref':''}" data-c="lsl">${d.attr?'Go':(lsl===null?'n/a':lsl.toFixed(limits(d).dp))}</td>
+    <td class="calc ${noTol?'ref':''}" data-c="usl">${d.attr?'NoGo':(usl===null?'n/a':usl.toFixed(limits(d).dp))}</td>
+    <td class="l"><input data-f="inst" value="${esc(d.inst)}"></td>
+    ${d.s.map((v,k)=>`<td class="s ${judge(d,v)}"><input data-f="s" data-k="${k}" value="${esc(v)}" ${d.attr?'':'inputmode="decimal"'}></td>`).join('')}
+    <td class="res ${res.toLowerCase()}" data-c="res">${res}</td>
+    <td class="noprint"><button class="del" data-del="${r}" title="Delete row" aria-label="Delete row ${r+1}">×</button></td>
+  </tr>`;
+}
+
+function refreshRow(r){
+  const tr = document.querySelector(`#dt tr[data-r="${r}"]`); const d = S.dims[r];
+  const {lsl, usl, dp} = limits(d);
+  if(!d.attr){
+    const noTol = lsl===null;
+    const L = tr.querySelector('[data-c="lsl"]'), U = tr.querySelector('[data-c="usl"]');
+    L.textContent = noTol?'n/a':lsl.toFixed(dp); U.textContent = noTol?'n/a':usl.toFixed(dp);
+    L.classList.toggle('ref', noTol); U.classList.toggle('ref', noTol);
+  }
+  tr.querySelectorAll('td.s').forEach((td,k) => { td.classList.remove('ok','nok'); const j = judge(d, d.s[k]); if(j) td.classList.add(j); });
+  const res = rowResult(d), rc = tr.querySelector('[data-c="res"]');
+  rc.textContent = res; rc.className = 'res '+res.toLowerCase();
+  updateDecision();
+}
+
+function updateDecision(){
+  const res = S.dims.map(rowResult);
+  const nok = res.filter(x=>x==='NOK').length, ok = res.filter(x=>x==='OK').length, pend = res.length - nok - ok;
+  const el = $('decision');
+  if(nok){ el.textContent = 'REJECTED'; el.className='dec nok'; }
+  else if(!pend && res.length){ el.textContent = 'ACCEPTED'; el.className='dec ok'; }
+  else { el.textContent = 'PENDING'; el.className='dec pend'; }
+  $('decNote').textContent = `${ok} OK, ${nok} NOK, ${pend} incomplete of ${res.length} characteristics`;
+  S.decision = el.textContent;
+}
+
+function bindSheet(){
+  const sheet = $('sheet');
+  sheet.oninput = e => {
+    const t = e.target;
+    if(t.dataset.o){ (t.dataset.o==='h'?S.header:S.info)[t.dataset.k] = t.value; return; }
+    const tr = t.closest('tr[data-r]'); if(!tr) return;
+    const r = +tr.dataset.r, d = S.dims[r], f = t.dataset.f;
+    if(f==='s') d.s[+t.dataset.k] = t.value;
+    else if(f==='up' || f==='lo'){ d[f] = num(t.value); if(d.src==='-'||d.src==='G') d.src='E'; }
+    else if(f==='text'){ d.text = t.value; const m = t.value.replace(/[^\d.\-]/g,''); const n = num(m); if(!d.attr && n!==null) d.nom = n; }
+    else d[f] = t.value;
+    refreshRow(r);
+  };
+  sheet.onchange = e => {
+    const t = e.target;
+    if(t.dataset.o){ (t.dataset.o==='h'?S.header:S.info)[t.dataset.k] = t.value; return; }
+    if(t.dataset.f==='s'){
+      const r = +t.closest('tr').dataset.r, d = S.dims[r];
+      if(d.attr){
+        const u = t.value.trim().toUpperCase();
+        t.value = !u ? '' : /^(N|R|X|0)/.test(u) ? 'NOK' : /^(O|Y|1|G|A)/.test(u) ? 'OK' : u;
+        d.s[+t.dataset.k] = t.value; refreshRow(r);
+      }
+    }
+  };
+  sheet.onkeydown = e => {
+    const t = e.target;
+    if(e.key !== 'Enter' || t.tagName !== 'INPUT' || !t.dataset.f) return;
+    e.preventDefault(); t.dispatchEvent(new Event('change', {bubbles:true}));
+    const tr = t.closest('tr[data-r]'); let nx = tr.nextElementSibling;
+    while(nx && !nx.dataset.r) nx = nx.nextElementSibling;
+    const sel = t.dataset.f==='s' ? `input[data-f="s"][data-k="${t.dataset.k}"]` : `input[data-f="${t.dataset.f}"]`;
+    let target = nx && nx.querySelector(sel);
+    if(!target && t.dataset.f==='s' && +t.dataset.k < N-1){ // wrap to next sample column, first row
+      target = document.querySelector(`#dt input[data-f="s"][data-k="${+t.dataset.k+1}"]`);
+    }
+    if(target){ target.focus(); target.select(); }
+  };
+  sheet.onclick = e => {
+    const del = e.target.dataset.del;
+    if(del !== undefined){ if(confirm('Delete row '+(+del+1)+'?')){ S.dims.splice(+del,1); render(); } }
+    if(e.target.id==='addRow'){ S.dims.push(normDim({feat:'',type:'L',text:'',nom:null,view:(S.dims.at(-1)||{}).view||''}, S.genTol, S.angTol)); S.dims.at(-1).attr=false; S.dims.at(-1).src='-'; render(); }
+    if(e.target.id==='gaugeOk'){ S.dims.forEach(d => { if(d.attr) d.s = Array(N).fill('OK'); }); render(); }
+  };
+}
+
+/* ================= Actions ================= */
+$('btnPrint').onclick = () => {
+  if(S.decision === 'PENDING' && !confirm('Some readings are incomplete. Print anyway?')) return;
+  document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim();
+  window.print();
+};
+
+$('btnNew').onclick = () => {
+  if(!confirm('Start a new report for this drawing? Current readings will be cleared.')) return;
+  S.dims.forEach(d => d.s = Array(N).fill('')); S.info = newInfo(); render(); status('New report started.', 'ok');
+};
+
+function masterPayload(){
+  return { header:S.header, genTol:S.genTol, angTol:S.angTol,
+           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,attr:d.attr,boxed:d.boxed,view:d.view,inst:d.inst})) };
+}
+
+$('btnSaveMaster').onclick = async () => {
+  if(!S.header.drawingNo){ status('Enter the drawing no. before saving the list.', 'err'); return; }
+  busy(true, 'Saving dimension list');
+  try{ const r = await api('saveMaster', {master: masterPayload()}); status(`${r.drawingNo} ${r.updated?'updated':'saved'} in Drawing_Master.`, 'ok'); loadMasters(); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnLoadMaster').onclick = async () => {
+  const dn = $('masterSel').value; if(!dn){ status('Select a drawing no.', 'err'); return; }
+  busy(true, 'Loading '+dn);
+  try{ loadData(await api('getMaster', {drawingNo: dn})); status(dn+' loaded. Enter readings.', 'ok'); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnSave').onclick = async () => {
+  busy(true, 'Saving report');
+  try{
+    const rows = S.dims.map((d, r) => { const {lsl, usl} = limits(d);
+      return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: lsl??'', usl: usl??'', inst:d.inst, s:d.s, result: rowResult(d) }; });
+    const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision } });
+    status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK).`, 'ok');
+  }catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+async function loadMasters(){
+  if(!CFG.url) return;
+  try{
+    const list = await api('listMasters');
+    $('masterSel').innerHTML = '<option value="">Select drawing no.</option>' +
+      list.map(m => `<option value="${esc(m.drawingNo)}">${esc(m.drawingNo)}  ${esc(m.partName)} (${m.count})</option>`).join('');
+  }catch(e){ status(e.message, 'err'); }
+}
+
+/* ================= Settings ================= */
+$('btnSettings').onclick = () => { $('cfgUrl').value = CFG.url; $('cfgKey').value = CFG.key; $('cfgCo').value = CFG.co; $('cfgFmt').value = CFG.fmt; $('dlg').showModal(); };
+$('cfgSave').onclick = () => {
+  CFG.url = $('cfgUrl').value.trim(); CFG.key = $('cfgKey').value.trim(); CFG.co = $('cfgCo').value.trim(); CFG.fmt = $('cfgFmt').value.trim();
+  Object.entries(CFG).forEach(([k,v]) => LS.set(k, v));
+  $('dlg').close(); status('Settings saved.', 'ok'); loadMasters(); if(S) render();
+};
+$('cfgTest').onclick = async () => {
+  const old = {...CFG}; CFG.url = $('cfgUrl').value.trim(); CFG.key = $('cfgKey').value.trim();
+  try{ await api('ping'); alert('Connected.'); }catch(e){ alert('Failed: '+e.message); }
+  Object.assign(CFG, {url:old.url, key:old.key});
+};
+
+/* ================= Demo: TVL-299/18 (manually read, verify before use) ================= */
+$('btnDemo').onclick = () => {
+  const V = 'Vernier Caliper', M = 'Digital Micrometer', P = 'Profile Projector', B = 'Bore Gauge', H = 'Height Gauge', DG = 'Depth Gauge';
+  const rows = [
+    ['End view','Width','L','26.0',26.0,null,null,0,V],['End view','Offset (upper)','L','13.3',13.3,null,null,0,P],['End view','Offset (lower)','L','12.7',12.7,null,null,0,P],
+    ['Section A-A','Outlet thread','T','5/8" BSP-14TPI-LH',null,null,null,0,'Thread Ring Gauge'],['Section A-A','Internal thread','T','M16x1',null,null,null,0,'Thread Plug Gauge'],
+    ['Section A-A','Bore dia','D','Ø11.0',11.0,null,null,0,B],['Section A-A','Depth','L','4.6',4.6,null,null,1,DG],['Section A-A','Depth','L','9.7',9.7,null,null,0,DG],
+    ['Section A-A','Length','L','13.8',13.8,null,null,0,V],['Section A-A','Length','L','20.0',20.0,null,null,0,H],['Section A-A','Step','L','4.0',4.0,null,null,1,P],
+    ['Section A-A','Step','L','3.3',3.3,null,null,1,P],['Section A-A','Angle','A','20°',20,null,null,0,P],['Section A-A','Bore dia','D','Ø20.0',20.0,null,null,1,B],
+    ['Section A-A','Groove position','L','1.93',1.93,null,null,0,P],['Section A-A','Groove position','L','1.93',1.93,null,null,0,P],['Section A-A','Groove position','L','3.53',3.53,null,null,0,P],
+    ['Section A-A','Length','L','12.5',12.5,null,null,1,H],['Section A-A','Step','L','1.4',1.4,null,null,1,P],['Section A-A','Length','L','9.2',9.2,null,null,0,V],
+    ['Section A-A','Bore dia','D','Ø16.0',16.0,0.1,-0.1,0,B],['Section A-A','Dia','D','Ø21.5',21.5,null,null,0,V],['Section A-A','Dia','D','Ø23.0',23.0,null,null,1,V],
+    ['Section A-A','Dia','D','Ø25.4',25.4,null,null,0,M],['Section A-A','Step','L','3.1',3.1,null,null,0,P],
+    ['Section A-A','ACME thread','T','1-1/4"-5 ACME-2G RH EXT CGA 790 V-1',null,null,null,0,'Thread Ring Gauge'],
+    ['Front view','Collar OD','D','Ø30.0',30.0,null,null,0,M],['Front view','Dia','D','Ø20.4',20.4,null,null,0,M],['Front view','Dia','D','Ø20.0',20.0,null,null,0,M],
+    ['Front view','Groove dia','D','Ø18.2',18.2,null,null,0,V],['Front view','Length','L','7.0',7.0,null,null,0,V],['Front view','Chamfer','L','2.0',2.0,null,null,0,P],
+    ['Front view','Groove width','L','3.3',3.3,null,null,0,P],['Front view','Length','L','12.4',12.4,null,null,0,V],['Front view','Width','L','2.3',2.3,null,null,0,P],
+    ['Front view','Length','L','23.7',23.7,null,null,0,H],['Front view','Overall length','L','43.3',43.3,null,null,0,V],['Front view','Length','L','16.3',16.3,null,null,0,V],
+    ['Front view','Thread length','L','14.6',14.6,null,null,0,V],['Front view','Length','L','5.0',5.0,null,null,0,V],['Front view','Length','L','19.6',19.6,null,null,0,V],
+    ['Detail AA','Dia','D','Ø8.3',8.3,null,null,0,P],['Detail AA','Seat dia','D','Ø6.3',6.3,0.10,-0.02,0,'Pin Gauge'],['Detail AA','Radius','R','R0.3',0.3,null,null,0,'Radius Gauge'],
+    ['Detail AA','Angle','A','30°',30,null,null,0,P],['Detail AA','Depth','L','0.9',0.9,null,null,0,P],
+    ['Threading details','ACME pitch','L','5.08',5.08,null,null,0,P],['Threading details','Thread flat','L','1.8',1.8,null,null,0,P],['Threading details','Thread flat','L','1.8',1.8,null,null,0,P],
+    ['Threading details','Thread angle','A','29°',29,null,null,0,P],['Threading details','Minor dia (min)','D','Ø26.162',26.162,null,null,0,V],
+    ['Threading details','Pitch dia','D','Ø28.984',28.984,null,null,0,'3-Wire / Thread Micrometer'],['Threading details','Major dia','D','Ø31.750',31.750,null,null,0,M]
+  ];
+  loadData({
+    header:{partName:'LOT VALVE ADAPTOR (OUTLET CARTRIDGE)', drawingNo:'TVL-299/18', revision:'', material:'BRASS', usedOn:'LOT VALVE'},
+    genTol: DEF_GENTOL, angTol:null,
+    dims: rows.map(r => ({view:r[0],feat:r[1],type:r[2],text:r[3],nom:r[4],up:r[5],lo:r[6],boxed:!!r[7],inst:r[8]}))
+  });
+  status('Demo loaded: TVL-299/18, '+S.dims.length+' dimensions. Verify, then Save list.', 'ok');
+};
+
+loadMasters();
+if(!CFG.url) status('Open Settings and paste your Apps Script URL.');
+</script>
+</body>
+</html>
