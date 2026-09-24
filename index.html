@@ -88,6 +88,10 @@ table{border-collapse:collapse;width:100%}
 .dt .view{display:block;font-size:10px;color:var(--muted);line-height:1}
 .dt .del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 4px}
 .dt .del:hover{color:var(--nok)}
+.dt .mgb:hover{color:var(--blue)}
+.dt td.act{white-space:nowrap;padding:0}
+.dt td.act .del{padding:0 3px}
+.dt td.mg input{font-weight:600}
 .dt tr.vrow td{background:#f1f4f7;font-weight:600;text-align:left;font-size:11.5px;height:20px}
 .tools{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .tools .btn{padding:6px 10px;font-size:13px}
@@ -386,7 +390,7 @@ function loadData(data, fresh){
   S = {
     header: Object.assign({partName:'',drawingNo:'',revision:'',material:'',usedOn:''}, data.header||{}),
     genTol: gt, angTol,
-    dims: (data.dims||[]).map(d => d.src ? Object.assign({}, d, {s:Array(N).fill('')}) : normDim(d, gt, angTol)),
+    dims: (data.dims||[]).map(d => d.src ? Object.assign({}, d, {s:Array(N).fill(''), note:''}) : normDim(d, gt, angTol)),
     info: newInfo()
   };
   render();
@@ -406,7 +410,17 @@ function judge(d, v){
   if(x===null || lsl===null) return '';
   return (x >= lsl - 1e-9 && x <= usl + 1e-9) ? 'ok' : 'nok';
 }
+// Merged readings: one note across the 5 sample columns (default for gauge rows)
+const isMerged = d => d.merge ?? !!d.attr;
+function noteJudge(v){
+  const u = String(v||'').trim().toUpperCase();
+  if(!u) return '';
+  if(/\b(NOK|NOT\s*OK|N\.?G\.?|REJ\w*|FAIL\w*)\b/.test(u)) return 'nok';
+  if(/\b(OK|ACC\w*|PASS\w*|GOOD)\b/.test(u)) return 'ok';
+  return '';
+}
 function rowResult(d){
+  if(isMerged(d)){ const j = noteJudge(d.note); return j ? j.toUpperCase() : ''; }
   const j = d.s.map(v => judge(d, v));
   if(j.includes('nok')) return 'NOK';
   if(j.filter(x=>x==='ok').length === N) return 'OK';
@@ -438,8 +452,8 @@ function render(){
   <div class="gt">General tolerance: ${gtText}</div>
 
   <table class="dt" id="dt">
-    <colgroup><col style="width:3%"><col style="width:15%"><col style="width:9%"><col style="width:5%"><col style="width:5%">
-      <col style="width:7%"><col style="width:7%"><col style="width:11%">${'<col style="width:6.4%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:2%"></colgroup>
+    <colgroup><col style="width:3%"><col style="width:14%"><col style="width:9%"><col style="width:5%"><col style="width:5%">
+      <col style="width:7%"><col style="width:7%"><col style="width:10%">${'<col style="width:6.4%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:4%"></colgroup>
     <thead><tr><th rowspan="2">Sr.</th><th rowspan="2">Characteristic</th><th rowspan="2">Nominal</th><th colspan="2">Tolerance</th>
       <th rowspan="2">LSL</th><th rowspan="2">USL</th><th rowspan="2">Instrument</th><th colspan="${N}">Observed readings</th><th rowspan="2">Result</th><th rowspan="2" class="noprint"></th></tr>
       <tr><th>+</th><th>−</th>${Array.from({length:N},(_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead>
@@ -480,9 +494,11 @@ function rowHtml(d, r){
     <td class="calc ${noTol?'ref':''}" data-c="lsl"><input data-f="lsl" value="${esc(lv)}" placeholder="n/a" title="${tip}"></td>
     <td class="calc ${noTol?'ref':''}" data-c="usl"><input data-f="usl" value="${esc(uv)}" placeholder="n/a" title="${tip}"></td>
     <td class="l"><input data-f="inst" value="${esc(d.inst)}"></td>
-    ${d.s.map((v,k)=>`<td class="s ${judge(d,v)}"><input data-f="s" data-k="${k}" value="${esc(v)}" ${d.attr?'':'inputmode="decimal"'}></td>`).join('')}
+    ${isMerged(d)
+      ? `<td class="s mg ${noteJudge(d.note)}" colspan="${N}"><input data-f="note" value="${esc(d.note||'')}" placeholder="Write note, e.g. All ${N} samples OK"></td>`
+      : d.s.map((v,k)=>`<td class="s ${judge(d,v)}"><input data-f="s" data-k="${k}" value="${esc(v)}" ${d.attr?'':'inputmode="decimal"'}></td>`).join('')}
     <td class="res ${res.toLowerCase()}" data-c="res">${res}</td>
-    <td class="noprint"><button class="del" data-del="${r}" title="Delete row" aria-label="Delete row ${r+1}">×</button></td>
+    <td class="noprint act"><button class="del mgb" data-merge="${r}" title="${isMerged(d)?'Split into 5 sample cells':'Merge 5 samples into one note'}" aria-label="Merge or split readings row ${r+1}">${isMerged(d)?'⇹':'⇔'}</button><button class="del" data-del="${r}" title="Delete row" aria-label="Delete row ${r+1}">×</button></td>
   </tr>`;
 }
 
@@ -497,7 +513,7 @@ function refreshRow(r){
     if(Ui !== document.activeElement) Ui.value = usl===null ? '' : usl.toFixed(dp);
     L.classList.toggle('ref', noTol); U.classList.toggle('ref', noTol);
   }
-  tr.querySelectorAll('td.s').forEach((td,k) => { td.classList.remove('ok','nok'); const j = judge(d, d.s[k]); if(j) td.classList.add(j); });
+  tr.querySelectorAll('td.s').forEach((td,k) => { td.classList.remove('ok','nok'); const j = isMerged(d) ? noteJudge(d.note) : judge(d, d.s[k]); if(j) td.classList.add(j); });
   const res = rowResult(d), rc = tr.querySelector('[data-c="res"]');
   rc.textContent = res; rc.className = 'res '+res.toLowerCase();
   updateDecision();
@@ -579,6 +595,7 @@ function bindSheet(){
     const tr = t.closest('tr[data-r]'); if(!tr) return;
     const r = +tr.dataset.r, d = S.dims[r], f = t.dataset.f;
     if(f==='s') d.s[+t.dataset.k] = t.value;
+    else if(f==='note') d.note = t.value;
     else if(f==='up' || f==='lo'){
       const p = parseTol(f, t.value), other = f==='up' ? 'lo' : 'up';
       if(p.both){ d.up = p.up; d.lo = p.lo; setTolInputs(tr, d, t); }
@@ -667,7 +684,8 @@ function bindSheet(){
     const del = e.target.dataset.del;
     if(del !== undefined){ if(confirm('Delete row '+(+del+1)+'?')){ S.dims.splice(+del,1); render(); } }
     if(e.target.id==='addRow'){ S.dims.push(normDim({feat:'',type:'L',text:'',nom:null,view:(S.dims.at(-1)||{}).view||''}, S.genTol, S.angTol)); S.dims.at(-1).attr=false; S.dims.at(-1).src='-'; render(); }
-    if(e.target.id==='gaugeOk'){ S.dims.forEach(d => { if(d.attr) d.s = Array(N).fill('OK'); }); render(); }
+    if(e.target.dataset.merge !== undefined){ const d = S.dims[+e.target.dataset.merge]; d.merge = !isMerged(d); render(); }
+    if(e.target.id==='gaugeOk'){ S.dims.forEach(d => { if(d.attr){ if(isMerged(d)){ if(!String(d.note||'').trim()) d.note = `All ${N} samples OK`; } else d.s = d.s.map(v => String(v).trim() ? v : 'OK'); } }); render(); status('Empty gauge rows marked OK. Rows already filled were not changed.', 'ok'); }
   };
 }
 
@@ -680,12 +698,12 @@ $('btnPrint').onclick = () => {
 
 $('btnNew').onclick = () => {
   if(!confirm('Start a new report for this drawing? Current readings will be cleared.')) return;
-  S.dims.forEach(d => d.s = Array(N).fill('')); S.info = newInfo(); render(); status('New report started.', 'ok');
+  S.dims.forEach(d => { d.s = Array(N).fill(''); d.note = ''; }); S.info = newInfo(); render(); status('New report started.', 'ok');
 };
 
 function masterPayload(){
   return { header:S.header, genTol:S.genTol, angTol:S.angTol,
-           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,tolNom:!!d.tolNom,attr:d.attr,lslTxt:d.lslTxt,uslTxt:d.uslTxt,boxed:d.boxed,view:d.view,inst:d.inst})) };
+           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,tolNom:!!d.tolNom,attr:d.attr,merge:d.merge,lslTxt:d.lslTxt,uslTxt:d.uslTxt,boxed:d.boxed,view:d.view,inst:d.inst})) };
 }
 
 $('btnSaveMaster').onclick = async () => {
@@ -708,7 +726,7 @@ $('btnSave').onclick = async () => {
   busy(true, 'Saving report');
   try{
     const rows = S.dims.map((d, r) => { const {lsl, usl} = limits(d);
-      return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: d.attr ? (d.lslTxt ?? 'Go') : (lsl??''), usl: d.attr ? (d.uslTxt ?? 'NoGo') : (usl??''), inst:d.inst, s:d.s, result: rowResult(d) }; });
+      return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: d.attr ? (d.lslTxt ?? 'Go') : (lsl??''), usl: d.attr ? (d.uslTxt ?? 'NoGo') : (usl??''), inst:d.inst, s: isMerged(d) ? [d.note||'','','','',''] : d.s, result: rowResult(d) }; });
     const state = { header:S.header, genTol:S.genTol, angTol:S.angTol, info:S.info, dims:S.dims };
     const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision, state } });
     status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK). Find it under Saved reports.`, 'ok');
