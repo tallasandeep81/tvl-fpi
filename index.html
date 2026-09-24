@@ -38,6 +38,10 @@ aside{background:var(--panel);border-right:1px solid var(--hair);padding:18px 16
 .btn.ghost{background:#fff;color:var(--blue)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.row3 .btn{padding:9px 6px}
+.btn.danger{color:var(--nok);border-color:var(--nok)}
+.btn.danger:hover{background:var(--nokbg)}
 select.fld,input.fld{width:100%;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
 .note{font-size:12px;color:var(--muted);line-height:1.4}
 #status{font-size:12.5px;line-height:1.4;min-height:18px}
@@ -91,7 +95,7 @@ table{border-collapse:collapse;width:100%}
 .dec{font-size:18px;font-weight:700;letter-spacing:.4px}
 .dec.ok{color:var(--ok)} .dec.nok{color:var(--nok)} .dec.pend{color:var(--warn)}
 .sum textarea{width:100%;border:0;resize:vertical;min-height:34px;font-size:12.5px;background:transparent}
-.sig{display:grid;grid-template-columns:repeat(3,1fr);margin-top:0}
+.sig{display:grid;grid-template-columns:repeat(2,1fr);margin-top:0}
 .sig div{border:1px solid var(--ink);border-top:0;padding:30px 8px 5px;font-size:12px;text-align:center}
 .sig div+div{border-left:0}
 .legend{font-size:10.5px;color:var(--muted);margin-top:4px}
@@ -164,9 +168,10 @@ dialog label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px
     <div class="grp">
       <h2>2. Saved drawings</h2>
       <select class="fld" id="masterSel"><option value="">Select drawing no.</option></select>
-      <div class="row2">
+      <div class="row3">
         <button class="btn ghost" id="btnLoadMaster">Load</button>
         <button class="btn ghost" id="btnSaveMaster" disabled>Save list</button>
+        <button class="btn ghost danger" id="btnDelMaster">Delete</button>
       </div>
       <div class="note">Save the checked dimension list once. Next FPI of the same part loads instantly, no AI call.</div>
     </div>
@@ -419,7 +424,7 @@ function render(){
     <div>Decision<div class="dec" id="decision"></div><div id="decNote" class="note"></div></div>
     <div>Remarks<textarea data-o="i" data-k="remarks">${esc(i.remarks)}</textarea></div>
   </div>
-  <div class="sig"><div>Operator</div><div>Inspected by (QA)</div><div>Approved by</div></div>`;
+  <div class="sig"><div>Inspected by (QA)</div><div>Approved by</div></div>`;
   $('sheet').innerHTML = html;
   bindSheet(); updateDecision();
 }
@@ -556,6 +561,15 @@ $('btnSave').onclick = async () => {
     const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision } });
     status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK).`, 'ok');
   }catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnDelMaster').onclick = async () => {
+  const dn = $('masterSel').value; if(!dn){ status('Select the drawing no. to delete.', 'err'); return; }
+  if(!confirm('Delete saved dimension list for ' + dn + '?\n\nSaved FPI reports are NOT deleted. You can read the drawing again later.')) return;
+  busy(true, 'Deleting ' + dn);
+  try{ await api('deleteMaster', {drawingNo: dn}); status(dn + ' deleted from saved drawings.', 'ok'); await loadMasters(); }
+  catch(e){ status(e.message, 'err'); }
   busy(false);
 };
 
