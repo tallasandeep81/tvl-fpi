@@ -81,6 +81,8 @@ table{border-collapse:collapse;width:100%}
 .dt .res{font-weight:700}
 .dt .res.ok{color:var(--ok)} .dt .res.nok{color:var(--nok);background:var(--nokbg)}
 .dt .calc{color:var(--muted)}
+.dt td.calc input{color:inherit}
+.dt td.ref input::placeholder{color:var(--warn);opacity:1}
 .dt .ref{color:var(--warn)}
 .dt .box{outline:1.2px solid var(--ink);outline-offset:-3px}
 .dt .view{display:block;font-size:10px;color:var(--muted);line-height:1}
@@ -436,8 +438,8 @@ function render(){
   <div class="gt">General tolerance: ${gtText}</div>
 
   <table class="dt" id="dt">
-    <colgroup><col style="width:3%"><col style="width:17%"><col style="width:9%"><col style="width:5%"><col style="width:5%">
-      <col style="width:6%"><col style="width:6%"><col style="width:11%">${'<col style="width:6.4%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:2%"></colgroup>
+    <colgroup><col style="width:3%"><col style="width:15%"><col style="width:9%"><col style="width:5%"><col style="width:5%">
+      <col style="width:7%"><col style="width:7%"><col style="width:11%">${'<col style="width:6.4%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:2%"></colgroup>
     <thead><tr><th rowspan="2">Sr.</th><th rowspan="2">Characteristic</th><th rowspan="2">Nominal</th><th colspan="2">Tolerance</th>
       <th rowspan="2">LSL</th><th rowspan="2">USL</th><th rowspan="2">Instrument</th><th colspan="${N}">Observed readings</th><th rowspan="2">Result</th><th rowspan="2" class="noprint"></th></tr>
       <tr><th>+</th><th>−</th>${Array.from({length:N},(_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead>
@@ -463,17 +465,20 @@ function render(){
 }
 
 function rowHtml(d, r){
-  const {lsl, usl} = limits(d);
+  const {lsl, usl, dp} = limits(d);
   const noTol = !d.attr && lsl===null;
   const res = rowResult(d);
+  const lv = d.attr ? (d.lslTxt ?? 'Go') : (lsl===null ? '' : lsl.toFixed(dp));
+  const uv = d.attr ? (d.uslTxt ?? 'NoGo') : (usl===null ? '' : usl.toFixed(dp));
+  const tip = 'Type a limit value, or Go / NoGo / text for a gauge check';
   return `<tr data-r="${r}">
     <td>${r+1}</td>
     <td class="l"><input data-f="feat" value="${esc(d.feat)}"></td>
     <td class="${d.boxed?'box':''}"><input data-f="text" value="${esc(d.text)}" title="Nominal as on drawing"></td>
     <td>${d.attr?'':`<input data-f="up" value="${esc(fmtTol(d.up))}">`}</td>
     <td>${d.attr?'':`<input data-f="lo" value="${esc(fmtTol(d.lo))}">`}</td>
-    <td class="calc ${noTol?'ref':''}" data-c="lsl">${d.attr?'Go':(lsl===null?'n/a':lsl.toFixed(limits(d).dp))}</td>
-    <td class="calc ${noTol?'ref':''}" data-c="usl">${d.attr?'NoGo':(usl===null?'n/a':usl.toFixed(limits(d).dp))}</td>
+    <td class="calc ${noTol?'ref':''}" data-c="lsl"><input data-f="lsl" value="${esc(lv)}" placeholder="n/a" title="${tip}"></td>
+    <td class="calc ${noTol?'ref':''}" data-c="usl"><input data-f="usl" value="${esc(uv)}" placeholder="n/a" title="${tip}"></td>
     <td class="l"><input data-f="inst" value="${esc(d.inst)}"></td>
     ${d.s.map((v,k)=>`<td class="s ${judge(d,v)}"><input data-f="s" data-k="${k}" value="${esc(v)}" ${d.attr?'':'inputmode="decimal"'}></td>`).join('')}
     <td class="res ${res.toLowerCase()}" data-c="res">${res}</td>
@@ -487,7 +492,9 @@ function refreshRow(r){
   if(!d.attr){
     const noTol = lsl===null;
     const L = tr.querySelector('[data-c="lsl"]'), U = tr.querySelector('[data-c="usl"]');
-    L.textContent = noTol?'n/a':lsl.toFixed(dp); U.textContent = noTol?'n/a':usl.toFixed(dp);
+    const Li = L.querySelector('input'), Ui = U.querySelector('input');
+    if(Li !== document.activeElement) Li.value = lsl===null ? '' : lsl.toFixed(dp);
+    if(Ui !== document.activeElement) Ui.value = usl===null ? '' : usl.toFixed(dp);
     L.classList.toggle('ref', noTol); U.classList.toggle('ref', noTol);
   }
   tr.querySelectorAll('td.s').forEach((td,k) => { td.classList.remove('ok','nok'); const j = judge(d, d.s[k]); if(j) td.classList.add(j); });
@@ -558,6 +565,8 @@ function applyNominal(d){
     else { const g = genTolFor(d.nom, S.genTol); d.up = g; d.lo = -g; d.src = 'G'; }
   }
 }
+const isNumTxt = v => /^[+\-]?\d*[.,]?\d+$/.test(String(v ?? '').trim());
+const toNum = v => parseFloat(String(v).trim().replace(',', '.'));
 function setTolInputs(tr, d, skip){
   ['up','lo'].forEach(f => { const el = tr.querySelector(`input[data-f="${f}"]`); if(el && el !== skip) el.value = fmtTol(d[f]); });
 }
@@ -581,6 +590,15 @@ function bindSheet(){
       d.src = 'E'; d.tolNom = false;
     }
     else if(f==='text'){ d.text = t.value; applyNominal(d); setTolInputs(tr, d, null); }
+    else if(f==='lsl' || f==='usl'){
+      const v = t.value.trim();
+      if(d.attr){ d[f+'Txt'] = v; return; }                       // gauge row: free text, checked on leave
+      if(isNumTxt(v) && d.nom !== null){
+        const n = toNum(v);
+        if(f==='lsl') d.lo = +(n - d.nom).toFixed(4); else d.up = +(n - d.nom).toFixed(4);
+        d.src = 'E'; d.tolNom = false; setTolInputs(tr, d, null);
+      } else if(v === '' ){ if(f==='lsl') d.lo = null; else d.up = null; setTolInputs(tr, d, null); }
+    }
     else d[f] = t.value;
     refreshRow(r);
   };
@@ -590,6 +608,30 @@ function bindSheet(){
     const trc = t.closest('tr[data-r]');
     if(trc && (t.dataset.f==='up' || t.dataset.f==='lo')){          // tidy display: 0.1 -> +0.1 / -0.1
       const d = S.dims[+trc.dataset.r]; setTolInputs(trc, d, null); refreshRow(+trc.dataset.r); return;
+    }
+    if(trc && (t.dataset.f==='lsl' || t.dataset.f==='usl')){
+      const r = +trc.dataset.r, d = S.dims[r], f = t.dataset.f, v = t.value.trim();
+      if(!d.attr && v !== '' && !isNumTxt(v)){                        // text typed -> gauge (OK/NOK) row
+        d.attr = true; d.lslTxt = f==='lsl' ? v : 'Go'; d.uslTxt = f==='usl' ? v : 'NoGo';
+        d.s = Array(N).fill(''); render(); status(`Row ${r+1} changed to gauge check (OK / NOK).`, 'ok'); return;
+      }
+      if(d.attr){
+        d[f+'Txt'] = v;
+        if(isNumTxt(d.lslTxt) && isNumTxt(d.uslTxt) && toNum(d.uslTxt) > toNum(d.lslTxt)){   // both numbers -> measured row
+          const a = toNum(d.lslTxt), b = toNum(d.uslTxt);
+          let n = firstNum(d.text); if(n === null || n < a || n > b) n = +((a+b)/2).toFixed(4);
+          d.attr = false; d.nom = n; d.lo = +(a-n).toFixed(4); d.up = +(b-n).toFixed(4); d.src = 'E'; d.tolNom = false;
+          if(d.type==='T' || d.type==='N') d.type = 'L';
+          if(!d.text) d.text = String(n);
+          d.s = Array(N).fill(''); render(); status(`Row ${r+1} changed to measured values (${a} to ${b}).`, 'ok');
+        }
+        return;
+      }
+      if(isNumTxt(v) && d.nom === null){                              // no nominal yet: use this limit as nominal
+        d.nom = toNum(v); if(f==='lsl') d.lo = 0; else d.up = 0; if(!d.text) d.text = v; d.src = 'E';
+        trc.querySelector('input[data-f="text"]').value = d.text;
+      }
+      setTolInputs(trc, d, null); refreshRow(r); return;
     }
     if(trc && t.dataset.f==='text'){                                  // tolerance typed inside nominal -> move to +/- columns
       const r = +trc.dataset.r, d = S.dims[r], an = analyzeNominal(t.value);
@@ -643,7 +685,7 @@ $('btnNew').onclick = () => {
 
 function masterPayload(){
   return { header:S.header, genTol:S.genTol, angTol:S.angTol,
-           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,tolNom:!!d.tolNom,attr:d.attr,boxed:d.boxed,view:d.view,inst:d.inst})) };
+           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,tolNom:!!d.tolNom,attr:d.attr,lslTxt:d.lslTxt,uslTxt:d.uslTxt,boxed:d.boxed,view:d.view,inst:d.inst})) };
 }
 
 $('btnSaveMaster').onclick = async () => {
@@ -666,7 +708,7 @@ $('btnSave').onclick = async () => {
   busy(true, 'Saving report');
   try{
     const rows = S.dims.map((d, r) => { const {lsl, usl} = limits(d);
-      return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: lsl??'', usl: usl??'', inst:d.inst, s:d.s, result: rowResult(d) }; });
+      return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: d.attr ? (d.lslTxt ?? 'Go') : (lsl??''), usl: d.attr ? (d.uslTxt ?? 'NoGo') : (usl??''), inst:d.inst, s:d.s, result: rowResult(d) }; });
     const state = { header:S.header, genTol:S.genTol, angTol:S.angTol, info:S.info, dims:S.dims };
     const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision, state } });
     status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK). Find it under Saved reports.`, 'ok');
@@ -709,10 +751,10 @@ async function loadReports(select){
 // Old reports (saved before this update) have no full state: rebuild rows from the stored table
 function stateFromRows(rep){
   const dims = (rep.rows || []).map(r => {
-    const attr = r.lsl === '' || r.lsl === null || r.lsl === undefined;
+    const attr = !isNumTxt(r.lsl);
     const text = String(r.spec || '').replace(/\s+[+\-]?\d*\.?\d*\/[+\-]?\d*\.?\d*\s*$/, '');
     const nom = attr ? null : firstNum(text);
-    return { feat:r.feat, type:attr?'T':'L', text, nom, attr, src:'E', boxed:false, view:'', inst:r.inst||'',
+    return { feat:r.feat, type:attr?'T':'L', text, nom, attr, lslTxt: attr ? (r.lsl || 'Go') : undefined, uslTxt: attr ? (r.usl || 'NoGo') : undefined, src:'E', boxed:false, view:'', inst:r.inst||'',
       up: attr||nom===null ? null : +(+r.usl - nom).toFixed(4), lo: attr||nom===null ? null : +(+r.lsl - nom).toFixed(4),
       s: (r.s||[]).slice(0,N).concat(Array(N).fill('')).slice(0,N) };
   });
