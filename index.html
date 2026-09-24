@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root{
   --ink:#1b2733; --muted:#5b6b7b; --line:#9fb0c1; --hair:#ccd6e0;
@@ -119,6 +120,20 @@ dialog label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px
   .dt{min-width:980px}
 }
 
+body.pdf .sheet{box-shadow:none;padding:0;width:auto;max-width:none;margin:0}
+body.pdf .noprint,body.pdf .tools,body.pdf .legend,body.pdf .dt .del{display:none!important}
+body.pdf .dt col.noprint{width:0!important}
+body.pdf .tb select{appearance:none;-webkit-appearance:none}
+body.pdf input[type=date]::-webkit-calendar-picker-indicator{display:none}
+body.pdf .sum textarea{resize:none;overflow:hidden}
+body.pdf .dt tr.vrow td{height:20px}
+body.pdf main{overflow:visible;padding:0}
+body.pdf aside{display:none}
+body.pdf .tb .co,body.pdf .tb .title{white-space:nowrap;font-size:15px}
+body.pdf .cowrap img{height:40px}
+body.pdf .app{display:block}
+body.pdf{background:#fff}
+
 @page{size:A4 landscape;margin:5mm}
 @media print{
   html,body{background:#fff;height:auto}
@@ -180,9 +195,22 @@ dialog label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px
       <h2>3. Report</h2>
       <div class="row2">
         <button class="btn" id="btnPrint" disabled>Print</button>
-        <button class="btn ghost" id="btnSave" disabled>Save to sheet</button>
+        <button class="btn ghost" id="btnPdf" disabled>Download PDF</button>
       </div>
-      <button class="btn ghost" id="btnNew" disabled>New report, same drawing</button>
+      <div class="row2">
+        <button class="btn ghost" id="btnSave" disabled>Save report</button>
+        <button class="btn ghost" id="btnNew" disabled>New report</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <h2>4. Saved reports</h2>
+      <select class="fld" id="repSel"><option value="">Select report</option></select>
+      <div class="row2">
+        <button class="btn ghost" id="btnOpenRep">Open</button>
+        <button class="btn ghost" id="btnPdfRep">Download PDF</button>
+      </div>
+      <div class="note">Open shows the saved report with readings. You can print, download, or correct and save again.</div>
     </div>
 
     <div id="status"></div>
@@ -326,6 +354,11 @@ function normDim(d, gt, angTol){
   const nom = num(d.nom);
   const attr = type==='T' || type==='N' || nom===null;
   let up = num(d.up), lo = num(d.lo), src = 'E';
+  let nomV = nom;
+  if(!attr && up===null && lo===null){
+    const an = analyzeNominal(d.text);
+    if(an && an.hasTol){ nomV = an.nom; up = an.up; lo = an.lo; d.tolNom = true; }
+  }
   if(!attr && up===null && lo===null){
     if(type==='A'){ if(angTol!=null){ up = angTol; lo = -angTol; src='G'; } else src='-'; }
     else { const t = genTolFor(nom, gt); up = t; lo = -t; src='G'; }
@@ -334,7 +367,7 @@ function normDim(d, gt, angTol){
   let text = d.text || (nom!==null ? String(nom) : '');
   if(type==='D' && text && !/^[Ø⌀]/.test(text)) text = 'Ø'+text;
   if(type==='A' && text && !/°$/.test(text)) text += '°';
-  return { feat:d.feat||'', type, text, nom, up, lo, src, attr, boxed:!!d.boxed, view:d.view||'', inst:d.inst||'',
+  return { feat:d.feat||'', type, text, nom:nomV, up, lo, src, attr, tolNom:!!d.tolNom, boxed:!!d.boxed, view:d.view||'', inst:d.inst||'',
            s: Array.isArray(d.s) ? d.s.slice(0,N).concat(Array(N).fill('')).slice(0,N) : Array(N).fill('') };
 }
 
@@ -381,7 +414,7 @@ const fmtTol = v => v===null ? '' : (v>0?'+':'') + v;
 
 function render(){
   $('empty').hidden = true; $('sheet').hidden = false;
-  ['btnPrint','btnSave','btnSaveMaster','btnNew'].forEach(id => $(id).disabled = false);
+  ['btnPrint','btnPdf','btnSave','btnSaveMaster','btnNew'].forEach(id => $(id).disabled = false);
   const h = S.header, i = S.info;
   const inp = (obj, k, extra='') => `<input data-o="${obj}" data-k="${k}" value="${esc((obj==='h'?h:i)[k])}" ${extra}>`;
   const gtText = S.genTol.map(r => `<span>${r.from} to ${r.to} mm: ±${r.tol}</span>`).join('') + (S.angTol!=null?`<span>Angles: ±${S.angTol}°</span>`:'');
@@ -498,6 +531,33 @@ function splitNominal(text){
   return null;
 }
 function firstNum(text){ const m = String(text||'').replace(',', '.').match(/\d*\.?\d+/); return m ? parseFloat(m[0]) : null; }
+// Read nominal cell: range "R0.3 - 0.4" / "20 - 25°", inline tol "0.9 ±0.15" / "27.0 +0 -0.4", or plain "48.2"
+function analyzeNominal(text){
+  const t = String(text||'').replace(/[−–—]/g,'-').replace(/,/g,'.').trim();
+  if(!t) return null;
+  const rg = t.match(/^(.*?)(\d*\.?\d+)\s*(?:-|to|~)\s*(\d*\.?\d+)\s*(°)?\s*$/i);
+  if(rg && !/\d/.test(rg[1])){
+    const a = +rg[2], b = +rg[3];
+    if(b > a){ const h = +((b-a)/2).toFixed(4); return {nom:+((a+b)/2).toFixed(4), up:h, lo:-h, hasTol:true, range:true}; }
+  }
+  const sp = splitNominal(t);
+  if(sp) return {nom:firstNum(sp.text), up:sp.up, lo:sp.lo, hasTol:true, clean:sp.text};
+  const n = firstNum(t);
+  return n===null ? null : {nom:n, hasTol:false};
+}
+// Apply nominal change to a row: new limits from the nominal text, or general tolerance for the new size band
+function applyNominal(d){
+  if(d.attr) return;
+  const an = analyzeNominal(d.text);
+  if(!an){ d.nom = null; return; }
+  d.nom = an.nom;
+  if(an.hasTol){ d.up = an.up; d.lo = an.lo; d.src = 'E'; d.tolNom = true; return; }
+  if(d.tolNom || d.src === 'G' || d.src === '-' || (d.up === null && d.lo === null)){
+    d.tolNom = false;
+    if(d.type === 'A'){ if(S.angTol != null){ d.up = S.angTol; d.lo = -S.angTol; d.src = 'G'; } else { d.up = d.lo = null; d.src = '-'; } }
+    else { const g = genTolFor(d.nom, S.genTol); d.up = g; d.lo = -g; d.src = 'G'; }
+  }
+}
 function setTolInputs(tr, d, skip){
   ['up','lo'].forEach(f => { const el = tr.querySelector(`input[data-f="${f}"]`); if(el && el !== skip) el.value = fmtTol(d[f]); });
 }
@@ -518,9 +578,9 @@ function bindSheet(){
         d[f] = p.val;
         if(p.val !== null && !had){ d[other] = -p.val; setTolInputs(tr, d, t); } // other side empty -> make symmetric
       }
-      d.src = 'E';
+      d.src = 'E'; d.tolNom = false;
     }
-    else if(f==='text'){ d.text = t.value; const n = firstNum(t.value); if(!d.attr && n!==null) d.nom = n; }
+    else if(f==='text'){ d.text = t.value; applyNominal(d); setTolInputs(tr, d, null); }
     else d[f] = t.value;
     refreshRow(r);
   };
@@ -531,9 +591,12 @@ function bindSheet(){
     if(trc && (t.dataset.f==='up' || t.dataset.f==='lo')){          // tidy display: 0.1 -> +0.1 / -0.1
       const d = S.dims[+trc.dataset.r]; setTolInputs(trc, d, null); refreshRow(+trc.dataset.r); return;
     }
-    if(trc && t.dataset.f==='text'){                                  // tolerance typed inside nominal
-      const r = +trc.dataset.r, d = S.dims[r], sp = splitNominal(t.value);
-      if(sp && !d.attr){ d.text = sp.text; d.nom = firstNum(sp.text); d.up = sp.up; d.lo = sp.lo; d.src = 'E'; t.value = sp.text; setTolInputs(trc, d, null); refreshRow(r); }
+    if(trc && t.dataset.f==='text'){                                  // tolerance typed inside nominal -> move to +/- columns
+      const r = +trc.dataset.r, d = S.dims[r], an = analyzeNominal(t.value);
+      if(an && an.clean && !d.attr){          // tolerance now lives in the +/- columns
+        d.text = an.clean; t.value = an.clean; d.nom = an.nom; d.up = an.up; d.lo = an.lo; d.src = 'E'; d.tolNom = false;
+      } else applyNominal(d);
+      setTolInputs(trc, d, null); refreshRow(r);
       return;
     }
     if(t.dataset.f==='s'){
@@ -580,13 +643,13 @@ $('btnNew').onclick = () => {
 
 function masterPayload(){
   return { header:S.header, genTol:S.genTol, angTol:S.angTol,
-           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,attr:d.attr,boxed:d.boxed,view:d.view,inst:d.inst})) };
+           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,tolNom:!!d.tolNom,attr:d.attr,boxed:d.boxed,view:d.view,inst:d.inst})) };
 }
 
 $('btnSaveMaster').onclick = async () => {
   if(!S.header.drawingNo){ status('Enter the drawing no. before saving the list.', 'err'); return; }
   busy(true, 'Saving dimension list');
-  try{ const r = await api('saveMaster', {master: masterPayload()}); status(`${r.drawingNo} ${r.updated?'updated':'saved'} in Drawing_Master.`, 'ok'); loadMasters(); }
+  try{ const r = await api('saveMaster', {master: masterPayload()}); status(`${r.drawingNo} ${r.updated?'updated':'saved'} in saved drawings.`, 'ok'); await loadMasters(r.drawingNo); }
   catch(e){ status(e.message, 'err'); }
   busy(false);
 };
@@ -604,8 +667,10 @@ $('btnSave').onclick = async () => {
   try{
     const rows = S.dims.map((d, r) => { const {lsl, usl} = limits(d);
       return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: lsl??'', usl: usl??'', inst:d.inst, s:d.s, result: rowResult(d) }; });
-    const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision } });
-    status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK).`, 'ok');
+    const state = { header:S.header, genTol:S.genTol, angTol:S.angTol, info:S.info, dims:S.dims };
+    const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision, state } });
+    status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK). Find it under Saved reports.`, 'ok');
+    await loadReports(r.reportNo);
   }catch(e){ status(e.message, 'err'); }
   busy(false);
 };
@@ -619,21 +684,102 @@ $('btnDelMaster').onclick = async () => {
   busy(false);
 };
 
-async function loadMasters(){
+async function loadMasters(select){
   if(!CFG.url) return;
   try{
     const list = await api('listMasters');
-    $('masterSel').innerHTML = '<option value="">Select drawing no.</option>' +
+    $('masterSel').innerHTML = `<option value="">${list.length ? 'Select drawing no. (' + list.length + ' saved)' : 'No saved drawings yet'}</option>` +
       list.map(m => `<option value="${esc(m.drawingNo)}">${esc(m.drawingNo)}  ${esc(m.partName)} (${m.count})</option>`).join('');
+    const want = String(select || (S && S.header && S.header.drawingNo) || '').trim().toUpperCase();
+    if(want && list.some(m => String(m.drawingNo).toUpperCase() === want)) $('masterSel').value = list.find(m => String(m.drawingNo).toUpperCase() === want).drawingNo;
   }catch(e){ status(e.message, 'err'); }
 }
+
+/* ================= Saved reports ================= */
+async function loadReports(select){
+  if(!CFG.url) return;
+  try{
+    const list = await api('listReports');
+    $('repSel').innerHTML = `<option value="">${list.length ? 'Select report (' + list.length + ')' : 'No saved reports yet'}</option>` +
+      list.map(r => `<option value="${esc(r.reportNo)}">${esc(r.date)} | ${esc(r.drawingNo)} | ${esc(r.decision)}${r.nok ? ' ('+r.nok+' NOK)' : ''} | ${esc(r.reportNo)}</option>`).join('');
+    if(select) $('repSel').value = select;
+  }catch(e){ status(e.message, 'err'); }
+}
+
+// Old reports (saved before this update) have no full state: rebuild rows from the stored table
+function stateFromRows(rep){
+  const dims = (rep.rows || []).map(r => {
+    const attr = r.lsl === '' || r.lsl === null || r.lsl === undefined;
+    const text = String(r.spec || '').replace(/\s+[+\-]?\d*\.?\d*\/[+\-]?\d*\.?\d*\s*$/, '');
+    const nom = attr ? null : firstNum(text);
+    return { feat:r.feat, type:attr?'T':'L', text, nom, attr, src:'E', boxed:false, view:'', inst:r.inst||'',
+      up: attr||nom===null ? null : +(+r.usl - nom).toFixed(4), lo: attr||nom===null ? null : +(+r.lsl - nom).toFixed(4),
+      s: (r.s||[]).slice(0,N).concat(Array(N).fill('')).slice(0,N) };
+  });
+  return { header:rep.header||{}, genTol:DEF_GENTOL, angTol:null, info:rep.info||newInfo(), dims };
+}
+
+async function openReport(no){
+  const rep = await api('getReport', {reportNo: no});
+  const st = rep.state || stateFromRows(rep);
+  S = {
+    header: Object.assign({partName:'',drawingNo:'',revision:'',material:'',usedOn:''}, st.header||{}),
+    genTol: st.genTol || DEF_GENTOL, angTol: st.angTol ?? null,
+    dims: (st.dims||[]).map(d => Object.assign({}, d, { s: (d.s||[]).slice(0,N).concat(Array(N).fill('')).slice(0,N) })),
+    info: Object.assign(newInfo(), st.info||{})
+  };
+  render();
+  $('sheet').scrollIntoView({block:'start'});
+}
+
+$('btnOpenRep').onclick = async () => {
+  const no = $('repSel').value; if(!no){ status('Select a saved report.', 'err'); return; }
+  busy(true, 'Opening ' + no);
+  try{ await openReport(no); status(no + ' opened. Print, download, or edit and Save report.', 'ok'); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnPdfRep').onclick = async () => {
+  const no = $('repSel').value; if(!no){ status('Select a saved report.', 'err'); return; }
+  busy(true, 'Opening ' + no);
+  try{ if(!S || S.info.reportNo !== no) await openReport(no); }
+  catch(e){ status(e.message, 'err'); busy(false); return; }
+  busy(false);
+  await downloadPdf();
+};
+
+/* ================= PDF download ================= */
+async function downloadPdf(){
+  if(!S){ status('Open or create a report first.', 'err'); return; }
+  if(!window.html2pdf){ status('PDF tool did not load. Use Print and choose "Save as PDF".', 'err'); return; }
+  const safe = x => String(x||'').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  const name = `${safe(S.info.reportNo)}_${safe(S.header.drawingNo)}.pdf`;
+  busy(true, 'Creating PDF');
+  document.body.classList.add('pdf');
+  window.scrollTo(0,0);
+  try{
+    await html2pdf().set({
+      margin: [5,5,5,5],
+      filename: name,
+      image: { type:'jpeg', quality:0.95 },
+      html2canvas: { scale:2, useCORS:true, scrollX:0, scrollY:0 },
+      jsPDF: { unit:'mm', format:'a4', orientation:'landscape' },
+      pagebreak: { mode:['css','legacy'], avoid:['tr', '.sum', '.sig'] }
+    }).from($('sheet')).save();
+    status(name + ' downloaded.', 'ok');
+  }catch(e){ status('PDF failed: ' + e.message, 'err'); }
+  document.body.classList.remove('pdf');
+  busy(false);
+}
+$('btnPdf').onclick = downloadPdf;
 
 /* ================= Settings ================= */
 $('btnSettings').onclick = () => { $('cfgUrl').value = CFG.url; $('cfgKey').value = CFG.key; $('cfgCo').value = CFG.co; $('cfgFmt').value = CFG.fmt; $('dlg').showModal(); };
 $('cfgSave').onclick = () => {
   CFG.url = $('cfgUrl').value.trim(); CFG.key = $('cfgKey').value.trim(); CFG.co = $('cfgCo').value.trim(); CFG.fmt = $('cfgFmt').value.trim();
   Object.entries(CFG).forEach(([k,v]) => LS.set(k, v));
-  $('dlg').close(); status('Settings saved.', 'ok'); loadMasters(); if(S) render();
+  $('dlg').close(); status('Settings saved.', 'ok'); loadMasters(); loadReports(); if(S) render();
 };
 $('cfgTest').onclick = async () => {
   const old = {...CFG}; CFG.url = $('cfgUrl').value.trim(); CFG.key = $('cfgKey').value.trim();
@@ -676,6 +822,7 @@ $('btnDemo').onclick = () => {
 
 $('brandLogo').src = LOGO;
 loadMasters();
+loadReports();
 if(!CFG.url) status('Open Settings and paste your Apps Script URL.');
 </script>
 </body>
