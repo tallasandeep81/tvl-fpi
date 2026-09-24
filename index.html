@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
   --ink:#1b2733; --muted:#5b6b7b; --line:#9fb0c1; --hair:#ccd6e0;
@@ -90,7 +91,18 @@ table{border-collapse:collapse;width:100%}
 .dt .del:hover{color:var(--nok)}
 .dt .mgb:hover{color:var(--blue)}
 .dt td.act{white-space:nowrap;padding:0}
-.dt td.act .del{padding:0 3px}
+.dt td.act .del{padding:0 2px}
+.dt .mvb{font-size:10px}
+.dt .mvb:disabled{opacity:.25;cursor:default}
+.dt .mvb:not(:disabled):hover{color:var(--blue)}
+.dt td.drag{cursor:grab;user-select:none}
+.dt td.drag:hover{background:var(--blue2)}
+.dt tr.dragging{opacity:.4}
+.dt tr.dropA td{box-shadow:inset 0 2px 0 var(--blue)}
+.dt tr.dropB td{box-shadow:inset 0 -2px 0 var(--blue)}
+.dt tr.moved td{background:#fffbe0;transition:background 1.2s}
+body.pdf .dt td.drag,body.pdf .dt td.drag:hover{background:none}
+@media print{.dt td.drag{cursor:auto}}
 .dt td.mg input{font-weight:600}
 .dt tr.vrow td{background:#f1f4f7;font-weight:600;text-align:left;font-size:11.5px;height:20px}
 .tools{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
@@ -452,8 +464,8 @@ function render(){
   <div class="gt">General tolerance: ${gtText}</div>
 
   <table class="dt" id="dt">
-    <colgroup><col style="width:3%"><col style="width:14%"><col style="width:9%"><col style="width:5%"><col style="width:5%">
-      <col style="width:7%"><col style="width:7%"><col style="width:10%">${'<col style="width:6.4%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:4%"></colgroup>
+    <colgroup><col style="width:3%"><col style="width:13%"><col style="width:8.5%"><col style="width:5%"><col style="width:5%">
+      <col style="width:7%"><col style="width:7%"><col style="width:10%">${'<col style="width:6.2%">'.repeat(N)}<col style="width:5%"><col class="noprint" style="width:6%"></colgroup>
     <thead><tr><th rowspan="2">Sr.</th><th rowspan="2">Characteristic</th><th rowspan="2">Nominal</th><th colspan="2">Tolerance</th>
       <th rowspan="2">LSL</th><th rowspan="2">USL</th><th rowspan="2">Instrument</th><th colspan="${N}">Observed readings</th><th rowspan="2">Result</th><th rowspan="2" class="noprint"></th></tr>
       <tr><th>+</th><th>−</th>${Array.from({length:N},(_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead>
@@ -486,7 +498,7 @@ function rowHtml(d, r){
   const uv = d.attr ? (d.uslTxt ?? 'NoGo') : (usl===null ? '' : usl.toFixed(dp));
   const tip = 'Type a limit value, or Go / NoGo / text for a gauge check';
   return `<tr data-r="${r}">
-    <td>${r+1}</td>
+    <td class="drag" title="Drag to move this row">${r+1}</td>
     <td class="l"><input data-f="feat" value="${esc(d.feat)}"></td>
     <td class="${d.boxed?'box':''}"><input data-f="text" value="${esc(d.text)}" title="Nominal as on drawing"></td>
     <td>${d.attr?'':`<input data-f="up" value="${esc(fmtTol(d.up))}">`}</td>
@@ -498,7 +510,7 @@ function rowHtml(d, r){
       ? `<td class="s mg ${noteJudge(d.note)}" colspan="${N}"><input data-f="note" value="${esc(d.note||'')}" placeholder="Write note, e.g. All ${N} samples OK"></td>`
       : d.s.map((v,k)=>`<td class="s ${judge(d,v)}"><input data-f="s" data-k="${k}" value="${esc(v)}" ${d.attr?'':'inputmode="decimal"'}></td>`).join('')}
     <td class="res ${res.toLowerCase()}" data-c="res">${res}</td>
-    <td class="noprint act"><button class="del mgb" data-merge="${r}" title="${isMerged(d)?'Split into 5 sample cells':'Merge 5 samples into one note'}" aria-label="Merge or split readings row ${r+1}">${isMerged(d)?'⇹':'⇔'}</button><button class="del" data-del="${r}" title="Delete row" aria-label="Delete row ${r+1}">×</button></td>
+    <td class="noprint act"><button class="del mvb" data-up="${r}" title="Move up" aria-label="Move row ${r+1} up" ${r===0?'disabled':''}>▲</button><button class="del mvb" data-down="${r}" title="Move down" aria-label="Move row ${r+1} down" ${r===S.dims.length-1?'disabled':''}>▼</button><button class="del mgb" data-merge="${r}" title="${isMerged(d)?'Split into 5 sample cells':'Merge 5 samples into one note'}" aria-label="Merge or split readings row ${r+1}">${isMerged(d)?'⇹':'⇔'}</button><button class="del" data-del="${r}" title="Delete row" aria-label="Delete row ${r+1}">×</button></td>
   </tr>`;
 }
 
@@ -587,6 +599,23 @@ function setTolInputs(tr, d, skip){
   ['up','lo'].forEach(f => { const el = tr.querySelector(`input[data-f="${f}"]`); if(el && el !== skip) el.value = fmtTol(d[f]); });
 }
 
+/* ---- Move rows ---- */
+// Moved row joins the view group it lands in (e.g. from End view into Section A-A)
+function moveRow(from, to){
+  if(to < 0 || to >= S.dims.length || from === to) return;
+  const [d] = S.dims.splice(from, 1);
+  S.dims.splice(to, 0, d);
+  const up = S.dims[to-1], dn = S.dims[to+1];
+  if(up && dn && up.view === dn.view) d.view = up.view;
+  else if(up && dn){ if(d.view !== up.view && d.view !== dn.view) d.view = up.view; }
+  else if(up) d.view = up.view; else if(dn) d.view = dn.view;
+  render(); flashRow(to);
+}
+function flashRow(r){
+  const tr = document.querySelector(`#dt tr[data-r="${r}"]`);
+  if(tr){ tr.classList.add('moved'); setTimeout(() => tr.classList.remove('moved'), 900); }
+}
+
 function bindSheet(){
   const sheet = $('sheet');
   sheet.oninput = e => {
@@ -667,6 +696,34 @@ function bindSheet(){
       }
     }
   };
+  // Drag a row by its Sr. number and drop it on another row
+  let dragFrom = null;
+  sheet.onmousedown = e => { const td = e.target.closest('td.drag'); if(td) td.parentElement.draggable = true; };
+  sheet.ondragstart = e => {
+    const tr = e.target.closest && e.target.closest('tr[data-r]'); if(!tr) return;
+    dragFrom = +tr.dataset.r; tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', String(dragFrom)); }catch(_){}
+  };
+  const clearDrop = () => sheet.querySelectorAll('.dropA,.dropB').forEach(x => x.classList.remove('dropA','dropB'));
+  sheet.ondragover = e => {
+    if(dragFrom === null) return;
+    const tr = e.target.closest('tr[data-r]'); if(!tr) return;
+    e.preventDefault(); clearDrop();
+    const box = tr.getBoundingClientRect();
+    tr.classList.add(e.clientY < box.top + box.height/2 ? 'dropA' : 'dropB');
+  };
+  sheet.ondrop = e => {
+    if(dragFrom === null) return;
+    const tr = e.target.closest('tr[data-r]'); if(!tr){ return; }
+    e.preventDefault();
+    const box = tr.getBoundingClientRect(), after = e.clientY >= box.top + box.height/2;
+    let to = +tr.dataset.r + (after ? 1 : 0);
+    if(to > dragFrom) to--;
+    const from = dragFrom; dragFrom = null; clearDrop();
+    moveRow(from, to);
+  };
+  sheet.ondragend = () => { dragFrom = null; clearDrop(); sheet.querySelectorAll('tr[draggable]').forEach(x => { x.draggable = false; x.classList.remove('dragging'); }); };
+
   sheet.onkeydown = e => {
     const t = e.target;
     if(e.key !== 'Enter' || t.tagName !== 'INPUT' || !t.dataset.f) return;
@@ -684,6 +741,13 @@ function bindSheet(){
     const del = e.target.dataset.del;
     if(del !== undefined){ if(confirm('Delete row '+(+del+1)+'?')){ S.dims.splice(+del,1); render(); } }
     if(e.target.id==='addRow'){ S.dims.push(normDim({feat:'',type:'L',text:'',nom:null,view:(S.dims.at(-1)||{}).view||''}, S.genTol, S.angTol)); S.dims.at(-1).attr=false; S.dims.at(-1).src='-'; render(); }
+    const bt = e.target.closest('button');
+    if(bt && (bt.dataset.up !== undefined || bt.dataset.down !== undefined)){
+      const r = +(bt.dataset.up ?? bt.dataset.down), step = bt.dataset.up !== undefined ? -1 : 1, d = S.dims[r], nb = S.dims[r + step];
+      if(nb && nb.view !== d.view){ d.view = nb.view; render(); flashRow(r); }   // first/last row of a group: step into next group
+      else moveRow(r, r + step);
+      return;
+    }
     if(e.target.dataset.merge !== undefined){ const d = S.dims[+e.target.dataset.merge]; d.merge = !isMerged(d); render(); }
     if(e.target.id==='gaugeOk'){ S.dims.forEach(d => { if(d.attr){ if(isMerged(d)){ if(!String(d.note||'').trim()) d.note = `All ${N} samples OK`; } else d.s = d.s.map(v => String(v).trim() ? v : 'OK'); } }); render(); status('Empty gauge rows marked OK. Rows already filled were not changed.', 'ok'); }
   };
@@ -692,8 +756,13 @@ function bindSheet(){
 /* ================= Actions ================= */
 $('btnPrint').onclick = () => {
   if(S.decision === 'PENDING' && !confirm('Some readings are incomplete. Print anyway?')) return;
-  document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim();
-  window.print();
+  const w = window.open('', '_blank');           // open now so the popup is not blocked
+  let doc;
+  try{ doc = buildPdf(); }catch(e){ if(w) w.close(); status('Print failed: ' + e.message, 'err'); return; }
+  if(!doc){ if(w) w.close(); document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim(); window.print(); return; }
+  doc.autoPrint();
+  const url = doc.output('bloburl');
+  if(w) w.location.href = url; else window.open(url, '_blank');
 };
 
 $('btnNew').onclick = () => {
@@ -810,27 +879,158 @@ $('btnPdfRep').onclick = async () => {
 };
 
 /* ================= PDF download ================= */
+/* ================= PDF report (fixed layout, fits 2 pages) ================= */
+const PDF_ASCII = t => String(t ?? '').replace(/[−–—]/g,'-').replace(/[⌀]/g,'Ø').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
+function pdfName(){
+  const safe = x => String(x||'').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  return `${safe(S.info.reportNo)}_${safe(S.header.drawingNo)}.pdf`;
+}
+function fmtDateDMY(v){ const m = String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v||''); }
+
+function buildPdf(){
+  if(!window.jspdf || !window.jspdf.jsPDF) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  if(typeof doc.autoTable !== 'function') return null;
+
+  const PW = 297, PH = 210, M = 6, W = PW - 2*M;
+  const INK = [27,39,51], MUTED = [91,107,123], BLUE = [31,79,122], HEAD = [230,238,246], GRP = [241,244,247];
+  const OKF = [227,243,232], OKT = [29,122,59], NOKF = [251,228,225], NOKT = [180,35,24], WARN = [154,90,0];
+  const h = S.header, i = S.info, T = PDF_ASCII;
+  const line = { lineColor: INK, lineWidth: 0.2 };
+
+  /* ---- title block ---- */
+  const L = (t) => ({ content:t, styles:{ fontSize:6.5, textColor:MUTED, fontStyle:'normal' } });
+  const V = (t, span) => ({ content:T(t), colSpan: span||1, styles:{ fontStyle:'bold' } });
+  doc.autoTable({
+    startY: M, margin:{ left:M, right:M, top:M, bottom:M }, theme:'grid', tableWidth: W,
+    styles: Object.assign({ fontSize:8, textColor:INK, cellPadding:{top:1,bottom:1,left:1.5,right:1.5}, valign:'middle', overflow:'ellipsize' }, line),
+    columnStyles: { 0:{cellWidth:20}, 1:{cellWidth:64}, 2:{cellWidth:16}, 3:{cellWidth:44}, 4:{cellWidth:22}, 5:{cellWidth:58}, 6:{cellWidth:16}, 7:{cellWidth:W-240} },
+    body: [
+      [ { content:T(CFG.co), colSpan:4, styles:{ fontSize:12.5, fontStyle:'bold', minCellHeight:12, cellPadding:{left:16, right:1.5, top:1, bottom:1} } },
+        { content:'FIRST PART INSPECTION REPORT', colSpan:2, styles:{ fontSize:11, fontStyle:'bold', halign:'center' } },
+        L('Format'), V(CFG.fmt) ],
+      [ L('Part name'), V(h.partName, 3), L('Report no.'), V(i.reportNo), L('Date'), V(fmtDateDMY(i.date)) ],
+      [ L('Drawing no.'), V(h.drawingNo), L('Rev.'), V(h.revision), L('Customer'), V(i.customer), L('Shift'), V(i.shift) ],
+      [ L('Material'), V(h.material), L('Used on'), V(h.usedOn), L('Machine'), V(i.machine), L('Lot qty'), V(i.lotQty) ],
+      [ L('FPI reason'), V(i.reason, 3), L('Operator'), V(i.operator), L('Inspector'), V(i.inspector) ]
+    ],
+    didDrawCell: d => {
+      if(d.section === 'body' && d.row.index === 0 && d.column.index === 0){
+        try{ const lh = d.cell.height - 2; doc.addImage(LOGO, 'PNG', d.cell.x + 1.5, d.cell.y + 1, lh * 1.13, lh); }catch(e){}
+      }
+    }
+  });
+  let y = doc.lastAutoTable.finalY + 3.2;
+  doc.setFontSize(7); doc.setTextColor(...MUTED);
+  const gt = S.genTol.map(r => `${r.from} to ${r.to} mm: ±${r.tol}`).join('    ') + (S.angTol != null ? `    Angles: ±${S.angTol}°` : '');
+  doc.text('General tolerance:  ' + gt, M, y);
+  y += 1.8;
+
+  /* ---- dimension table: row height chosen so the report fits in 2 pages ---- */
+  const body = []; let lastView = null;
+  S.dims.forEach((d, r) => {
+    if(d.view && d.view !== lastView){ body.push([{ content:T(d.view), colSpan:9+N, styles:{ fillColor:GRP, fontStyle:'bold', halign:'left' } }]); lastView = d.view; }
+    const { lsl, usl, dp } = limits(d);
+    const lv = d.attr ? (d.lslTxt ?? 'Go') : (lsl===null ? 'n/a' : lsl.toFixed(dp));
+    const uv = d.attr ? (d.uslTxt ?? 'NoGo') : (usl===null ? 'n/a' : usl.toFixed(dp));
+    const res = rowResult(d);
+    const row = [
+      String(r+1), { content:T(d.feat), styles:{ halign:'left' } }, { content:T(d.text), styles: d.boxed ? { fontStyle:'bold' } : {} },
+      d.attr ? '' : T(fmtTol(d.up)), d.attr ? '' : T(fmtTol(d.lo)),
+      { content:T(lv), styles:{ textColor: (!d.attr && lsl===null) ? WARN : MUTED } },
+      { content:T(uv), styles:{ textColor: (!d.attr && usl===null) ? WARN : MUTED } },
+      { content:T(d.inst), styles:{ halign:'left' } }
+    ];
+    if(isMerged(d)){
+      const j = noteJudge(d.note);
+      row.push({ content:T(d.note||''), colSpan:N, styles: j==='ok' ? { fillColor:OKF, textColor:OKT, fontStyle:'bold' } : j==='nok' ? { fillColor:NOKF, textColor:NOKT, fontStyle:'bold' } : { fontStyle:'bold' } });
+    } else {
+      d.s.forEach(v => { const j = judge(d, v); row.push({ content:T(v), styles: j==='ok' ? { fillColor:OKF, textColor:OKT } : j==='nok' ? { fillColor:NOKF, textColor:NOKT, fontStyle:'bold' } : {} }); });
+    }
+    row.push({ content:res, styles:{ fontStyle:'bold', textColor: res==='OK' ? OKT : res==='NOK' ? NOKT : INK, fillColor: res==='NOK' ? NOKF : false } });
+    body.push(row);
+  });
+
+  // space needed after the table: decision/remarks box + signatures
+  const remarks = T(i.remarks || '');
+  doc.setFontSize(8);
+  const remLines = doc.splitTextToSize(remarks || ' ', W*0.62 - 4);
+  const remH = Math.max(14, remLines.length * 3.5 + 8);
+  const FOOT = 5, SUMMARY = remH + 16 + 2 + 3, HEADROWS = 8.5;
+  const avail = (PH - M - FOOT - y - HEADROWS) + (PH - 2*M - FOOT - HEADROWS - SUMMARY);
+  const rh = Math.max(3.2, Math.min(6.5, (avail - 6) / Math.max(1, body.length)));   // 6 mm slack for the page break
+  const fs = Math.max(5.8, Math.min(9, rh * 1.75));
+  const pad = Math.max(0.15, (rh - fs * 1.15 * 0.3528) / 2 - 0.01);   // cell height = text line + 2*pad = rh
+
+  const cw = { 0:7, 1:47, 2:31, 3:11, 4:11, 5:17, 6:17, 7:31, [8+N]:13 };
+  const sampleW = (W - Object.values(cw).reduce((a,b)=>a+b,0)) / N;
+  const colStyles = {}; Object.entries(cw).forEach(([k,v]) => colStyles[k] = { cellWidth:v }); for(let k=0;k<N;k++) colStyles[8+k] = { cellWidth:sampleW };
+
+  doc.autoTable({
+    startY: y, margin:{ left:M, right:M, top:M, bottom:M+FOOT }, theme:'grid', tableWidth:W,
+    styles: Object.assign({ fontSize:fs, textColor:INK, halign:'center', valign:'middle', overflow:'ellipsize', minCellHeight:rh, cellPadding:{ top:pad, bottom:pad, left:1, right:1 } }, line),
+    headStyles: { fillColor:HEAD, textColor:INK, fontStyle:'bold', fontSize:Math.min(fs,8), minCellHeight:4.2, cellPadding:0.6 },
+    columnStyles: colStyles,
+    head: [
+      [ {content:'Sr.', rowSpan:2}, {content:'Characteristic', rowSpan:2}, {content:'Nominal', rowSpan:2}, {content:'Tolerance', colSpan:2},
+        {content:'LSL', rowSpan:2}, {content:'USL', rowSpan:2}, {content:'Instrument', rowSpan:2}, {content:'Observed readings', colSpan:N}, {content:'Result', rowSpan:2} ],
+      [ '+', '-', ...Array.from({length:N}, (_,k) => String(k+1)) ]
+    ],
+    body, showHead:'everyPage', rowPageBreak:'avoid'
+  });
+  y = doc.lastAutoTable.finalY + 2;
+
+  /* ---- decision, remarks, signatures (kept together) ---- */
+  const need = remH + 18;
+  if(y + need > PH - M - FOOT){ doc.addPage(); y = M; }
+  const dec = S.decision || 'PENDING', decC = dec==='ACCEPTED' ? OKT : dec==='REJECTED' ? NOKT : WARN;
+  const res = S.dims.map(rowResult), nOk = res.filter(x=>x==='OK').length, nNok = res.filter(x=>x==='NOK').length;
+  doc.autoTable({
+    startY: y, margin:{ left:M, right:M, top:M, bottom:M+FOOT }, theme:'grid', tableWidth:W,
+    styles: Object.assign({ fontSize:8, textColor:INK, cellPadding:1.8, valign:'top', overflow:'linebreak' }, line),
+    columnStyles: { 0:{ cellWidth:W*0.38 }, 1:{ cellWidth:W*0.62 } },
+    body: [
+      [ { content:'', styles:{ minCellHeight:remH } }, { content:'', styles:{ minCellHeight:remH } } ],
+      [ { content:'Inspected by (QA)', styles:{ minCellHeight:16, valign:'bottom', halign:'center', textColor:MUTED } },
+        { content:'Approved by', styles:{ minCellHeight:16, valign:'bottom', halign:'center', textColor:MUTED } } ]
+    ],
+    rowPageBreak:'avoid',
+    didDrawCell: d => {
+      if(d.section!=='body' || d.row.index!==0) return;
+      const x = d.cell.x + 1.8; let yy = d.cell.y + 3.8;
+      doc.setFontSize(7.5); doc.setTextColor(...MUTED); doc.setFont('helvetica','normal');
+      if(d.column.index===0){
+        doc.text('Decision', x, yy);
+        doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...decC); doc.text(dec, x, yy + 5.5);
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...MUTED);
+        doc.text(`${nOk} OK, ${nNok} NOK, ${res.length-nOk-nNok} incomplete of ${res.length} characteristics`, x, yy + 9.5);
+      } else {
+        doc.text('Remarks', x, yy);
+        doc.setFontSize(8); doc.setTextColor(...INK);
+        doc.text(remLines, x, yy + 4);
+      }
+    }
+  });
+
+  /* ---- footer on every page ---- */
+  const pages = doc.getNumberOfPages();
+  for(let p = 1; p <= pages; p++){
+    doc.setPage(p); doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...MUTED);
+    doc.text(`${T(i.reportNo)}  |  ${T(h.drawingNo)}  |  ${T(h.partName)}`, M, PH - M + 1);
+    doc.text(`Page ${p} of ${pages}`, PW - M, PH - M + 1, { align:'right' });
+  }
+  return doc;
+}
+
 async function downloadPdf(){
   if(!S){ status('Open or create a report first.', 'err'); return; }
-  if(!window.html2pdf){ status('PDF tool did not load. Use Print and choose "Save as PDF".', 'err'); return; }
-  const safe = x => String(x||'').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g,'-').replace(/^-|-$/g,'');
-  const name = `${safe(S.info.reportNo)}_${safe(S.header.drawingNo)}.pdf`;
-  busy(true, 'Creating PDF');
-  document.body.classList.add('pdf');
-  window.scrollTo(0,0);
-  try{
-    await html2pdf().set({
-      margin: [5,5,5,5],
-      filename: name,
-      image: { type:'jpeg', quality:0.95 },
-      html2canvas: { scale:2, useCORS:true, scrollX:0, scrollY:0 },
-      jsPDF: { unit:'mm', format:'a4', orientation:'landscape' },
-      pagebreak: { mode:['css','legacy'], avoid:['tr', '.sum', '.sig'] }
-    }).from($('sheet')).save();
-    status(name + ' downloaded.', 'ok');
-  }catch(e){ status('PDF failed: ' + e.message, 'err'); }
-  document.body.classList.remove('pdf');
-  busy(false);
+  let doc;
+  try{ doc = buildPdf(); }catch(e){ status('PDF failed: ' + e.message, 'err'); return; }
+  if(!doc){ status('PDF tool did not load. Use Print and choose "Save as PDF".', 'err'); return; }
+  const pages = doc.getNumberOfPages();
+  doc.save(pdfName());
+  status(`${pdfName()} downloaded (${pages} page${pages>1?'s':''}).` + (pages > 2 ? ' Too many rows to fit 2 pages; delete unused rows to shorten.' : ''), 'ok');
 }
 $('btnPdf').onclick = downloadPdf;
 
