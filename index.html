@@ -474,6 +474,34 @@ function updateDecision(){
   S.decision = el.textContent;
 }
 
+/* ---- Tolerance entry helpers ---- */
+// "+" column: value as typed (0.1 -> +0.1, -0.02 stays -0.02). "±0.1" fills both.
+// "−" column: plain number is taken as minus (0.1 -> -0.1). Type "+0.05" only if lower limit is above nominal.
+function parseTol(field, raw){
+  const s = String(raw||'').trim().replace(/[−–]/g,'-').replace(/\s+/g,'');
+  if(!s) return {val:null};
+  const pm = s.match(/^(±|\+\/-|\+-)(\d*\.?\d+)$/);
+  if(pm){ const v = parseFloat(pm[2]); return {both:true, up:v, lo:-v}; }
+  const v = num(s); if(v===null) return {val:null};
+  if(field==='up') return {val:v};
+  return {val: s.startsWith('+') ? Math.abs(v) : -Math.abs(v)};
+}
+// Tolerance written inside nominal: "Ø6.3 +0.10/-0.02", "16.0 ±0.1", "20 +0.2 -0.1"
+function splitNominal(text){
+  const t = String(text||'').replace(/[−–]/g,'-');
+  let m = t.match(/^(.*?\d)\s*(?:±|\+\/-)\s*(\d*\.?\d+)\s*$/);
+  if(m) return {text:m[1].trim(), up:+m[2], lo:-m[2]};
+  m = t.match(/^(.*?\d)\s*\+\s*(\d*\.?\d+)\s*\/?\s*-\s*(\d*\.?\d+)\s*$/);
+  if(m) return {text:m[1].trim(), up:+m[2], lo:-m[3]};
+  m = t.match(/^(.*?\d)\s*-\s*(\d*\.?\d+)\s*\/?\s*\+\s*(\d*\.?\d+)\s*$/);
+  if(m) return {text:m[1].trim(), up:+m[3], lo:-m[2]};
+  return null;
+}
+function firstNum(text){ const m = String(text||'').replace(',', '.').match(/\d*\.?\d+/); return m ? parseFloat(m[0]) : null; }
+function setTolInputs(tr, d, skip){
+  ['up','lo'].forEach(f => { const el = tr.querySelector(`input[data-f="${f}"]`); if(el && el !== skip) el.value = fmtTol(d[f]); });
+}
+
 function bindSheet(){
   const sheet = $('sheet');
   sheet.oninput = e => {
@@ -482,14 +510,32 @@ function bindSheet(){
     const tr = t.closest('tr[data-r]'); if(!tr) return;
     const r = +tr.dataset.r, d = S.dims[r], f = t.dataset.f;
     if(f==='s') d.s[+t.dataset.k] = t.value;
-    else if(f==='up' || f==='lo'){ d[f] = num(t.value); if(d.src==='-'||d.src==='G') d.src='E'; }
-    else if(f==='text'){ d.text = t.value; const m = t.value.replace(/[^\d.\-]/g,''); const n = num(m); if(!d.attr && n!==null) d.nom = n; }
+    else if(f==='up' || f==='lo'){
+      const p = parseTol(f, t.value), other = f==='up' ? 'lo' : 'up';
+      if(p.both){ d.up = p.up; d.lo = p.lo; setTolInputs(tr, d, t); }
+      else {
+        const had = d[other] !== null;
+        d[f] = p.val;
+        if(p.val !== null && !had){ d[other] = -p.val; setTolInputs(tr, d, t); } // other side empty -> make symmetric
+      }
+      d.src = 'E';
+    }
+    else if(f==='text'){ d.text = t.value; const n = firstNum(t.value); if(!d.attr && n!==null) d.nom = n; }
     else d[f] = t.value;
     refreshRow(r);
   };
   sheet.onchange = e => {
     const t = e.target;
     if(t.dataset.o){ (t.dataset.o==='h'?S.header:S.info)[t.dataset.k] = t.value; return; }
+    const trc = t.closest('tr[data-r]');
+    if(trc && (t.dataset.f==='up' || t.dataset.f==='lo')){          // tidy display: 0.1 -> +0.1 / -0.1
+      const d = S.dims[+trc.dataset.r]; setTolInputs(trc, d, null); refreshRow(+trc.dataset.r); return;
+    }
+    if(trc && t.dataset.f==='text'){                                  // tolerance typed inside nominal
+      const r = +trc.dataset.r, d = S.dims[r], sp = splitNominal(t.value);
+      if(sp && !d.attr){ d.text = sp.text; d.nom = firstNum(sp.text); d.up = sp.up; d.lo = sp.lo; d.src = 'E'; t.value = sp.text; setTolInputs(trc, d, null); refreshRow(r); }
+      return;
+    }
     if(t.dataset.f==='s'){
       const r = +t.closest('tr').dataset.r, d = S.dims[r];
       if(d.attr){
