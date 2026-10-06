@@ -815,15 +815,28 @@ function bindSheet(){
 
 /* ================= Actions ================= */
 $('btnPrint').onclick = () => {
+  if(!S) return;
   if(S.decision === 'PENDING' && !confirm('Some readings are incomplete. Print anyway?')) return;
-  const w = window.open('', '_blank');           // open now so the popup is not blocked
   let doc;
-  try{ doc = buildPdf(); }catch(e){ if(w) w.close(); status('Print failed: ' + e.message, 'err'); return; }
-  if(!doc){ if(w) w.close(); document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim(); window.print(); return; }
-  doc.autoPrint();
-  const url = doc.output('bloburl');
-  if(w) w.location.href = url; else window.open(url, '_blank');
+  try{ doc = buildPdf(); }catch(e){ status('Print failed: ' + e.message, 'err'); return; }
+  if(!doc){ document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim(); window.print(); return; }   // PDF tool not loaded: browser print
+  printPdf(doc);
 };
+
+// Print the same 2-page PDF through a hidden frame (no popup needed)
+function printPdf(doc){
+  const url = URL.createObjectURL(doc.output('blob'));
+  const old = document.getElementById('printFrame'); if(old) old.remove();
+  const f = document.createElement('iframe');
+  f.id = 'printFrame'; f.title = 'Print';
+  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:1100px;height:800px;border:0;';
+  f.onload = () => setTimeout(() => {
+    try{ f.contentWindow.focus(); f.contentWindow.print(); status('Print window opened. If it did not appear, use Download PDF and print the file.', 'ok'); }
+    catch(e){ const w = window.open(url, '_blank'); status(w ? 'PDF opened in a new tab. Press Ctrl+P there.' : 'Allow pop-ups for this site, or use Download PDF.', w ? 'ok' : 'err'); }
+  }, 800);
+  f.src = url;
+  document.body.appendChild(f);
+}
 
 $('btnNew').onclick = () => {
   if(!confirm('Start a new report for this drawing? Current readings will be cleared.')) return;
