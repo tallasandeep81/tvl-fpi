@@ -816,26 +816,21 @@ function bindSheet(){
 /* ================= Actions ================= */
 $('btnPrint').onclick = () => {
   if(!S) return;
-  if(S.decision === 'PENDING' && !confirm('Some readings are incomplete. Print anyway?')) return;
   let doc;
   try{ doc = buildPdf(); }catch(e){ status('Print failed: ' + e.message, 'err'); return; }
-  if(!doc){ document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim(); window.print(); return; }   // PDF tool not loaded: browser print
+  if(!doc){ document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim(); window.print(); return; }   // PDF tool not loaded
   printPdf(doc);
 };
 
-// Print the same 2-page PDF through a hidden frame (no popup needed)
+// Opens the 2-page PDF in a new tab with the print dialog. No confirm() before it, so Chrome does not block the tab.
 function printPdf(doc){
+  doc.autoPrint();
   const url = URL.createObjectURL(doc.output('blob'));
-  const old = document.getElementById('printFrame'); if(old) old.remove();
-  const f = document.createElement('iframe');
-  f.id = 'printFrame'; f.title = 'Print';
-  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:1100px;height:800px;border:0;';
-  f.onload = () => setTimeout(() => {
-    try{ f.contentWindow.focus(); f.contentWindow.print(); status('Print window opened. If it did not appear, use Download PDF and print the file.', 'ok'); }
-    catch(e){ const w = window.open(url, '_blank'); status(w ? 'PDF opened in a new tab. Press Ctrl+P there.' : 'Allow pop-ups for this site, or use Download PDF.', w ? 'ok' : 'err'); }
-  }, 800);
-  f.src = url;
-  document.body.appendChild(f);
+  const w = window.open(url, '_blank');
+  const warn = S.decision === 'PENDING' ? ' Note: some readings are still empty.' : '';
+  if(w){ status('Report opened in a new tab for printing. If the print box does not appear, press Ctrl+P there.' + warn, 'ok'); return; }
+  doc.save(pdfName());
+  status('Pop-up blocked, so the PDF was downloaded instead. Open it and press Ctrl+P. (To print directly next time: click the blocked pop-up icon in the address bar > Always allow.)' + warn, 'err');
 }
 
 $('btnNew').onclick = () => {
@@ -923,6 +918,7 @@ function stateFromRows(rep){
 
 async function openReport(no){
   const rep = await api('getReport', {reportNo: no});
+  if(!rep || typeof rep !== 'object') throw new Error('Report ' + no + ' could not be read from the sheet. Update Code.gs to the latest version and Deploy > Manage deployments > New version.');
   const st = rep.state || stateFromRows(rep);
   S = {
     header: Object.assign({partName:'',drawingNo:'',revision:'',material:'',usedOn:''}, st.header||{}),
@@ -944,10 +940,12 @@ $('btnOpenRep').onclick = async () => {
 
 $('btnPdfRep').onclick = async () => {
   const no = $('repSel').value; if(!no){ status('Select a saved report.', 'err'); return; }
-  busy(true, 'Opening ' + no);
-  try{ if(!S || S.info.reportNo !== no) await openReport(no); }
-  catch(e){ status(e.message, 'err'); busy(false); return; }
-  busy(false);
+  if(!S || S.info.reportNo !== no){
+    busy(true, 'Opening ' + no);
+    try{ await openReport(no); }
+    catch(e){ status(e.message, 'err'); busy(false); return; }
+    busy(false);
+  }
   await downloadPdf();
 };
 
