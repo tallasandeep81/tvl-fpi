@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TVL First Part Inspection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1b2733; --muted:#5b6b7b; --line:#9fb0c1; --hair:#ccd6e0;
+  --bg:#dde4ea; --panel:#f5f7f9; --paper:#fff;
+  --blue:#1f4f7a; --blue2:#e6eef6;
+  --ok:#1d7a3b; --okbg:#e3f3e8; --nok:#b42318; --nokbg:#fbe4e1; --warn:#9a5a00;
+  --ui:'Barlow',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  --tab:'Barlow Semi Condensed','Arial Narrow',Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--ui);color:var(--ink);background:var(--bg);font-size:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+
+.app{display:grid;grid-template-columns:310px 1fr;min-height:100%}
+aside{background:var(--panel);border-right:1px solid var(--hair);padding:18px 16px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px}
+.brand b{display:grid;place-items:center;width:40px;height:40px;border:2px solid var(--blue);color:var(--blue);font-weight:700;letter-spacing:.5px}
+.brand h1{font-size:17px;margin:0;line-height:1.15}
+.brand small{color:var(--muted);font-size:12px}
+.grp{display:flex;flex-direction:column;gap:8px}
+.grp h2{font-size:13px;margin:0;color:var(--blue);font-weight:600}
+.drop{border:1.5px dashed var(--line);background:#fff;padding:14px;text-align:center;cursor:pointer;border-radius:4px;color:var(--muted)}
+.drop.over{border-color:var(--blue);background:var(--blue2)}
+.drop strong{display:block;color:var(--ink);font-weight:600;margin-bottom:2px}
+#preview{width:100%;border:1px solid var(--hair);background:#fff;display:none;max-height:360px;object-fit:contain}
+.btn{border:1px solid var(--blue);background:var(--blue);color:#fff;padding:9px 12px;border-radius:4px;cursor:pointer;font-weight:600;text-align:center}
+.btn.ghost{background:#fff;color:var(--blue)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.row3 .btn{padding:9px 6px}
+.btn.danger{color:var(--nok);border-color:var(--nok)}
+.btn.danger:hover{background:var(--nokbg)}
+select.fld,input.fld{width:100%;padding:8px;border:1px solid var(--line);border-radius:4px;background:#fff}
+.note{font-size:12px;color:var(--muted);line-height:1.4}
+#status{font-size:12.5px;line-height:1.4;min-height:18px}
+#status.err{color:var(--nok)} #status.ok{color:var(--ok)}
+.foot{margin-top:auto;display:flex;gap:8px}
+
+main{padding:24px;overflow:auto}
+.sheet{background:var(--paper);width:100%;max-width:1180px;margin:0 auto;padding:14px 16px;box-shadow:0 1px 0 var(--hair),0 8px 24px rgba(27,39,51,.08)}
+.empty{max-width:1180px;margin:60px auto;text-align:center;color:var(--muted)}
+.empty h3{color:var(--ink);font-size:20px;margin:0 0 6px}
+
+/* report */
+table{border-collapse:collapse;width:100%}
+.tb td{border:1px solid var(--ink);padding:3px 6px;font-size:12.5px;vertical-align:middle}
+.tb .co{font-weight:700;font-size:17px;letter-spacing:.3px}
+.cowrap{display:flex;align-items:center;gap:10px}
+.cowrap img{height:46px;width:auto;flex:none}
+.tb .title{font-weight:700;font-size:16px;text-align:center}
+.tb .lbl{color:var(--muted);font-size:11px;white-space:nowrap;width:1%}
+.tb input,.tb select{border:0;background:transparent;width:100%;padding:1px 0;font-weight:600}
+.tb input:hover,.tb select:hover{background:var(--blue2)}
+.gt{margin-top:6px;font-size:11.5px;color:var(--muted)}
+.gt span{margin-right:12px}
+
+.dt{margin-top:8px;font-family:var(--tab);table-layout:fixed}
+.dt th,.dt td{border:1px solid var(--ink);padding:0 3px;font-size:12.5px;height:24px}
+.dt thead th{background:var(--blue2);font-weight:600;text-align:center;line-height:1.1;padding:3px}
+.dt td{text-align:center}
+.dt td.l{text-align:left}
+.dt input{width:100%;border:0;background:transparent;text-align:center;padding:2px 0;font-family:var(--tab);font-size:12.5px}
+.dt td.l input{text-align:left}
+.dt input:hover{background:var(--blue2)}
+.dt input:focus{background:#fffbe0;outline:1px solid var(--blue)}
+.dt .s.ok{background:var(--okbg);color:var(--ok);font-weight:600}
+.dt .s.nok{background:var(--nokbg);color:var(--nok);font-weight:700}
+.dt .res{font-weight:700}
+.smp{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font-size:13px;color:var(--muted)}
+.smp .btn{padding:4px 10px;font-size:15px;line-height:1}
+.smp b{min-width:18px;text-align:center;color:var(--ink)}
+.dt td.res select{appearance:none;-webkit-appearance:none;width:100%;border:0;background:transparent;font:inherit;font-weight:700;color:inherit;text-align:center;text-align-last:center;cursor:pointer;padding:2px 0}
+.dt td.res select:hover{background:var(--blue2)}
+.dt td.res.man{box-shadow:inset 0 0 0 1.5px currentColor}
+.dt .res.ok{color:var(--ok)} .dt .res.nok{color:var(--nok);background:var(--nokbg)}
+.dt .calc{color:var(--muted)}
+.dt td.calc input{color:inherit}
+.dt td.ref input::placeholder{color:var(--warn);opacity:1}
+.dt .ref{color:var(--warn)}
+.dt .box{outline:1.2px solid var(--ink);outline-offset:-3px}
+.dt .view{display:block;font-size:10px;color:var(--muted);line-height:1}
+.dt .del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 4px}
+.dt .del:hover{color:var(--nok)}
+.dt .mgb:hover{color:var(--blue)}
+.dt td.act{white-space:nowrap;padding:0}
+.dt td.act .del{padding:0 2px}
+.dt .mvb{font-size:10px}
+.dt .mvb:disabled{opacity:.25;cursor:default}
+.dt .mvb:not(:disabled):hover{color:var(--blue)}
+.dt td.drag{cursor:grab;user-select:none}
+.dt td.drag:hover{background:var(--blue2)}
+.dt tr.dragging{opacity:.4}
+.dt tr.dropA td{box-shadow:inset 0 2px 0 var(--blue)}
+.dt tr.dropB td{box-shadow:inset 0 -2px 0 var(--blue)}
+.dt tr.moved td{background:#fffbe0;transition:background 1.2s}
+body.pdf .dt td.drag,body.pdf .dt td.drag:hover{background:none}
+@media print{.dt td.drag{cursor:auto}}
+.dt td.mg input{font-weight:600}
+.dt tr.vrow td{background:#f1f4f7;font-weight:600;text-align:left;font-size:11.5px;height:20px}
+.tools{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.tools .btn{padding:6px 10px;font-size:13px}
+
+.sum{display:grid;grid-template-columns:1.2fr 2fr;gap:0;margin-top:8px}
+.sum>div{border:1px solid var(--ink);padding:6px 8px;font-size:12.5px}
+.sum>div+div{border-left:0}
+.dec{font-size:18px;font-weight:700;letter-spacing:.4px}
+.dec.ok{color:var(--ok)} .dec.nok{color:var(--nok)} .dec.pend{color:var(--warn)}
+.sum textarea{width:100%;border:0;resize:vertical;min-height:34px;font-size:12.5px;background:transparent}
+.sig{display:grid;grid-template-columns:repeat(2,1fr);margin-top:0}
+.sig div{border:1px solid var(--ink);border-top:0;padding:30px 8px 5px;font-size:12px;text-align:center}
+.sig div+div{border-left:0}
+.legend{font-size:10.5px;color:var(--muted);margin-top:4px}
+
+.busy{position:fixed;inset:0;background:rgba(221,228,234,.82);display:none;place-items:center;z-index:50}
+.busy.on{display:grid}
+.busy div{background:#fff;border:1px solid var(--hair);padding:22px 28px;text-align:center;max-width:340px}
+.spin{width:34px;height:34px;border:3px solid var(--blue2);border-top-color:var(--blue);border-radius:50%;margin:0 auto 10px;animation:r 1s linear infinite}
+@keyframes r{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+
+dialog{border:1px solid var(--hair);padding:18px;width:min(460px,92vw)}
+dialog::backdrop{background:rgba(27,39,51,.4)}
+dialog label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto}
+  main{padding:10px}
+  .sheet{overflow-x:auto}
+  .dt{min-width:980px}
+}
+
+body.pdf .sheet{box-shadow:none;padding:0;width:auto;max-width:none;margin:0}
+body.pdf .noprint,body.pdf .tools,body.pdf .legend,body.pdf .dt .del{display:none!important}
+body.pdf .dt col.noprint{width:0!important}
+body.pdf .tb select{appearance:none;-webkit-appearance:none}
+body.pdf input[type=date]::-webkit-calendar-picker-indicator{display:none}
+body.pdf .sum textarea{resize:none;overflow:hidden}
+body.pdf .dt tr.vrow td{height:20px}
+body.pdf main{overflow:visible;padding:0}
+body.pdf aside{display:none}
+body.pdf .tb .co,body.pdf .tb .title{white-space:nowrap;font-size:15px}
+body.pdf .cowrap img{height:40px}
+body.pdf .app{display:block}
+body.pdf{background:#fff}
+
+@page{size:A4 landscape;margin:6mm}
+#printView{display:none}
+@media print{
+  body.pv-ready .app, body.pv-ready .busy, body.pv-ready dialog{display:none!important}
+  body.pv-ready #printView{display:block}
+  #printView{font-family:Arial,Helvetica,sans-serif;color:#1b2733;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #printView table{border-collapse:collapse;width:285mm;table-layout:fixed}
+  #printView td,#printView th{border:0.25mm solid #1b2733;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .pv-tb td{font-size:8pt;padding:0.6mm 1.2mm;height:5.2mm}
+  .pv-tb .lb{font-size:6.5pt;color:#5b6b7b}
+  .pv-tb .v{font-weight:bold}
+  .pv-tb .co{font-size:12.5pt;font-weight:bold;height:12mm}
+  .pv-tb .co img{height:10mm;vertical-align:middle;margin-right:3mm}
+  .pv-tb .ti{font-size:11pt;font-weight:bold;text-align:center}
+  .pv-gt{font-size:7pt;color:#5b6b7b;margin:1.2mm 0}
+  .pv-dt thead th{background:#e6eef6;font-size:7.5pt;height:4.2mm;padding:0 0.6mm}
+  .pv-dt thead{display:table-header-group}
+  .pv-dt tr{break-inside:avoid;page-break-inside:avoid}
+  .pv-dt td{text-align:center;padding:0 1mm;line-height:1}
+  .pv-dt td.l{text-align:left}
+  .pv-dt tr.g td{background:#f1f4f7;font-weight:bold;text-align:left}
+  .pv-dt .m{color:#5b6b7b} .pv-dt .w{color:#9a5a00}
+  .pv-dt .ok{background:#e3f3e8;color:#1d7a3b} .pv-dt .nok{background:#fbe4e1;color:#b42318;font-weight:bold}
+  .pv-dt .b{font-weight:bold}
+  .pv-sum{display:grid;grid-template-columns:38% 62%;width:285mm;margin-top:2mm;break-inside:avoid;page-break-inside:avoid;border:0.25mm solid #1b2733}
+  .pv-sum>div{padding:1.5mm 2mm;font-size:8pt}
+  .pv-sum>div+div{border-left:0.25mm solid #1b2733}
+  .pv-sum .lb{font-size:7pt;color:#5b6b7b}
+  .pv-sum .dec{font-size:13pt;font-weight:bold;margin:1mm 0}
+  .pv-sum .rem{white-space:pre-wrap;word-break:break-word}
+  .pv-sig{grid-column:1/-1;display:grid;grid-template-columns:50% 50%;border-top:0.25mm solid #1b2733;padding:0!important}
+  .pv-sig div{height:15mm;display:flex;align-items:flex-end;justify-content:center;padding-bottom:1.5mm;font-size:7.5pt;color:#5b6b7b}
+  .pv-sig div+div{border-left:0.25mm solid #1b2733}
+}
+@media print{
+  html,body{background:#fff;height:auto}
+  .app{display:block}
+  aside,.tools,.noprint,.dt .del,.busy,dialog,.legend{display:none!important}
+  main{padding:0;overflow:visible}
+  .sheet{box-shadow:none;padding:0;max-width:none;width:100%;margin:0}
+  .dt col.noprint{width:0!important}
+  .tb td{font-size:10pt;padding:2px 5px}
+  .tb .co{font-size:13pt;white-space:nowrap} .tb .title{font-size:13pt;white-space:nowrap}
+  .cowrap img{height:13mm}
+  .gt{font-size:8.5pt;margin-top:2px}
+  .dt{margin-top:4px}
+  .dt th,.dt td{font-size:10pt;height:6.6mm}
+  .dt thead th{font-size:9.5pt}
+  .dt input,.tb input,.tb select{font-size:10pt}
+  .dt .view{display:none}
+  .dt thead{display:table-header-group}
+  .dt tr{page-break-inside:avoid}
+  .dt tr.vrow td{height:5mm;font-size:9pt}
+  .sum,.sig{page-break-inside:avoid}
+  .sig div{padding-top:12mm}
+  .tb select{appearance:none;-webkit-appearance:none}
+  input[type=date]::-webkit-calendar-picker-indicator{display:none}
+  .sum textarea{resize:none;overflow:hidden}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><img id="brandLogo" alt="TVL" style="width:44px;height:auto"><div><h1>First Part Inspection</h1><small>Drawing to FPI report</small></div></div>
+
+    <div class="grp">
+      <h2>1. Drawing</h2>
+      <label class="drop" id="drop">
+        <strong>Upload drawing</strong>PDF, PNG or JPG (A4 scan)
+        <input type="file" id="file" accept="application/pdf,image/png,image/jpeg,image/webp" hidden>
+      </label>
+      <canvas id="pdfCanvas" style="display:none;width:100%;border:1px solid var(--hair)"></canvas>
+      <img id="preview" alt="Drawing preview">
+      <button class="btn" id="btnExtract" disabled>Read dimensions</button>
+      <div class="note">AI reads every dimension. Check each row before measuring.</div>
+    </div>
+
+    <div class="grp">
+      <h2>2. Saved drawings</h2>
+      <select class="fld" id="masterSel"><option value="">Select drawing no.</option></select>
+      <div class="row3">
+        <button class="btn ghost" id="btnLoadMaster">Load</button>
+        <button class="btn ghost" id="btnSaveMaster" disabled>Save list</button>
+        <button class="btn ghost danger" id="btnDelMaster">Delete</button>
+      </div>
+      <div class="note">Save the checked dimension list once. Next FPI of the same part loads instantly, no AI call.</div>
+    </div>
+
+    <div class="grp">
+      <h2>3. Report</h2>
+      <div class="row2">
+        <button class="btn" id="btnPrint" disabled>Print</button>
+        <button class="btn ghost" id="btnPdf" disabled>Download PDF</button>
+      </div>
+      <div class="row2">
+        <button class="btn ghost" id="btnSave" disabled>Save report</button>
+        <button class="btn ghost" id="btnNew" disabled>New report</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <h2>4. Saved reports</h2>
+      <select class="fld" id="repSel"><option value="">Select report</option></select>
+      <div class="row3">
+        <button class="btn ghost" id="btnOpenRep">Open</button>
+        <button class="btn ghost" id="btnPdfRep">PDF</button>
+        <button class="btn ghost danger" id="btnDelRep">Delete</button>
+      </div>
+      <div class="note">Open shows the saved report with readings. You can print, download, or correct and save again.</div>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="foot">
+      <button class="btn ghost" id="btnSettings" style="flex:1">Settings</button>
+      <button class="btn ghost" id="btnDemo" style="flex:1">Demo TVL-299/18</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="empty" id="empty">
+      <h3>Upload a drawing to start</h3>
+      <p>Or load a saved drawing number from the left panel.</p>
+    </div>
+    <div class="sheet" id="sheet" hidden></div>
+  </main>
+</div>
+
+<div class="busy" id="busy"><div><div class="spin"></div><b id="busyMsg">Reading drawing</b><div class="note">Usually 20 to 60 seconds</div></div></div>
+
+<dialog id="dlg">
+  <b>Settings</b>
+  <label for="cfgUrl">Apps Script web app URL</label>
+  <input class="fld" id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  <label for="cfgKey">Access key (APP_KEY, if set)</label>
+  <input class="fld" id="cfgKey" type="password">
+  <label for="cfgCo">Company name on report</label>
+  <input class="fld" id="cfgCo">
+  <label for="cfgFmt">Format no. on report</label>
+  <input class="fld" id="cfgFmt" placeholder="QA/F/..">
+  <div class="row2" style="margin-top:14px">
+    <button class="btn ghost" id="cfgTest">Test connection</button>
+    <button class="btn" id="cfgSave">Save</button>
+  </div>
+</dialog>
+
+<script>
+/* ================= Config ================= */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('tvlfpi_'+k); return v===null?d:v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('tvlfpi_'+k, v); }catch(e){} }
+};
+// Built-in backend: every device opens with data, no Settings needed.
+// If you make a NEW deployment, paste its /exec URL here once and commit.
+const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbyrZrGhiWbtpZOZtoq2UB2b6QxQ9zQLKljTnptorKTb7mP_cSaMDWA5m1xl7lEFGiGvsg/exec';
+const DEFAULT_KEY = '';
+(() => {   // link can carry the backend: ...github.io/tvl-fpi/?api=<exec url>&key=<APP_KEY>
+  try{ const q = new URLSearchParams(location.search);
+    if(q.get('api')) LS.set('urlOverride', q.get('api')); if(q.get('key')) LS.set('key', q.get('key'));
+    if(q.get('api') || q.get('key')) history.replaceState(null, '', location.pathname);
+  }catch(e){}
+})();
+const CFG = {
+  url: LS.get('urlOverride','') || DEFAULT_URL, key: LS.get('key','') || DEFAULT_KEY,
+  co: LS.get('co','TRANS VALVES (INDIA) PVT. LTD., HYDERABAD'),
+  fmt: LS.get('fmt','QA/F/FPI')
+};
+const DEF_GENTOL = [{from:0.5,to:3,tol:0.1},{from:3,to:6,tol:0.1},{from:6,to:30,tol:0.2},{from:30,to:120,tol:0.3}];
+let N = 5; // samples per report (1 to 10), changed with − / + above the table
+const fitS = (arr, n) => (arr||[]).slice(0,n).concat(Array(n).fill('')).slice(0,n);
+const LOGO = 'data:image/png;base64,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';
+
+/* ================= State ================= */
+let FILE = null;              // {name, mime, b64}
+let S = null;                 // {header, genTol, angTol, dims:[], info:{}, remarks}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = v => { if(v===null||v===undefined||v==='') return null; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n)?null:n; };
+function status(msg, cls=''){ const s=$('status'); s.textContent=msg; s.className=cls; }
+function busy(on, msg){ $('busy').classList.toggle('on', on); if(msg) $('busyMsg').textContent = msg; }
+
+async function api(action, payload={}){
+  if(!CFG.url) throw new Error('Set the Apps Script URL in Settings first.');
+  const r = await fetch(CFG.url, { method:'POST', body: JSON.stringify(Object.assign({action, key:CFG.key}, payload)) });
+  const txt = await r.text();
+  let j;
+  try{ j = JSON.parse(txt); }
+  catch(_){
+    // Google returned an HTML error page instead of data: show its message
+    const doc = new DOMParser().parseFromString(txt, 'text/html');
+    const msg = (doc.querySelector('.errorMessage, #errorMessage, div[style*="padding"]') || doc.body || {}).textContent || '';
+    const clean = msg.replace(/\s+/g,' ').trim().slice(0, 220);
+    let hint = '';
+    if(/maximum execution time|timed? ?out|exceeded/i.test(clean)) hint = ' Server took too long. Try again; if it repeats, use a smaller/clearer drawing file.';
+    else if(/function not found|doPost/i.test(clean)) hint = ' Code.gs not saved/deployed. Save, then Deploy > Manage deployments > New version.';
+    else if(/sign in|accounts\.google|permission|access/i.test(clean + txt.slice(0,3000))) hint = ' Web app access must be "Anyone". Check Manage deployments.';
+    else if(/too large|payload|size/i.test(clean)) hint = ' File too large. Scan at 200 dpi or use JPG.';
+    throw new Error(`Server error (${action}, HTTP ${r.status}): ${clean || 'Google returned an error page.'}${hint}`);
+  }
+  if(!j.ok) throw new Error(j.error || 'Request failed');
+  return j.data;
+}
+
+/* ================= File upload ================= */
+const PDFJS_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+// Heavy libraries load only when needed, so the page opens instantly
+const LIBS = {
+  pdfjs:  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'],
+  jspdf:  ['https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'],
+  atable: ['https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js']
+};
+const _libP = {};
+function loadLib(name){
+  if(_libP[name]) return _libP[name];
+  const tryUrl = i => new Promise((res, rej) => {
+    if(i >= LIBS[name].length) return rej(new Error(name + ' could not load (check internet)'));
+    const sc = document.createElement('script'); sc.src = LIBS[name][i]; sc.async = true;
+    let done = false;
+    const next = () => { if(done) return; done = true; sc.remove(); tryUrl(i+1).then(res, rej); };
+    const t = setTimeout(next, 15000);
+    sc.onload = () => { if(done) return; done = true; clearTimeout(t); res(); };
+    sc.onerror = () => { clearTimeout(t); next(); };
+    document.head.appendChild(sc);
+  });
+  _libP[name] = tryUrl(0).catch(e => { delete _libP[name]; throw e; });
+  return _libP[name];
+}
+const ensurePdfLib = () => loadLib('jspdf').then(() => loadLib('atable'));
+
+const drop = $('drop');
+['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => { if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+$('file').addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+function readB64(file){
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+}
+
+async function compressImage(file){
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+  const max = 3000, sc = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas'); c.width = img.width*sc; c.height = img.height*sc;
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  URL.revokeObjectURL(url);
+  return c.toDataURL('image/jpeg', 0.9).split(',')[1];
+}
+
+async function handleFile(file){
+  const mime = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '');
+  if(!/^(application\/pdf|image\/(png|jpeg|webp))$/.test(mime)){ status('Upload a PDF, PNG or JPG file.', 'err'); return; }
+  if(file.size > 25*1024*1024){ status('File is over 25 MB. Scan at 200 to 300 dpi and try again.', 'err'); return; }
+  status('Loading '+file.name+'…');
+  let b64, m = mime;
+  if(mime.startsWith('image/') && file.size > 3.5*1024*1024){ b64 = await compressImage(file); m = 'image/jpeg'; }
+  else b64 = await readB64(file);
+  FILE = { name:file.name, mime:m, b64 };
+  $('btnExtract').disabled = false;
+  $('preview').style.display = 'none'; $('pdfCanvas').style.display = 'none';
+  if(m === 'application/pdf'){ try{ await loadLib('pdfjs'); }catch(e){} }
+  if(m === 'application/pdf' && window.pdfjsLib){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    try{
+      const pdf = await pdfjsLib.getDocument({data: Uint8Array.from(atob(b64), c => c.charCodeAt(0))}).promise;
+      const page = await pdf.getPage(1); const vp = page.getViewport({scale:0.6});
+      const cv = $('pdfCanvas'); cv.width = vp.width; cv.height = vp.height;
+      await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
+      cv.style.display = 'block';
+    }catch(e){ /* preview optional */ }
+  } else if(m.startsWith('image/')){
+    $('preview').src = 'data:'+m+';base64,'+b64; $('preview').style.display = 'block';
+  }
+  status(file.name+' ready. Press Read dimensions.', 'ok');
+}
+
+/* ================= Extraction ================= */
+$('btnExtract').onclick = async () => {
+  if(!FILE) return;
+  busy(true, 'Reading dimensions from drawing');
+  try{
+    const out = await api('extract', { fileBase64: FILE.b64, mimeType: FILE.mime, fileName: FILE.name });
+    loadData(out, true);
+    const refs = S.dims.filter(d => d.src==='-' && !d.attr).length;
+    status(`${S.dims.length} dimensions found. ${refs ? refs+' have no tolerance (shown amber). ' : ''}Check every row, then Save list.`, 'ok');
+  }catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+function genTolFor(v, gt){
+  const a = Math.abs(v), list = (gt && gt.length ? gt : DEF_GENTOL).slice().sort((x,y)=>x.from-y.from);
+  if(a < list[0].from) return list[0].tol;
+  const hit = list.find(r => a >= r.from && a <= r.to);
+  return hit ? hit.tol : list[list.length-1].tol;
+}
+
+function normDim(d, gt, angTol){
+  const type = String(d.type||'L').toUpperCase();
+  const nom = num(d.nom);
+  const attr = type==='T' || type==='N' || nom===null;
+  let up = num(d.up), lo = num(d.lo), src = 'E';
+  let nomV = nom;
+  if(!attr && up===null && lo===null){
+    const an = analyzeNominal(d.text);
+    if(an && an.hasTol){ nomV = an.nom; up = an.up; lo = an.lo; d.tolNom = true; }
+  }
+  if(!attr && up===null && lo===null){
+    if(type==='A'){ if(angTol!=null){ up = angTol; lo = -angTol; src='G'; } else src='-'; }
+    else { const t = genTolFor(nom, gt); up = t; lo = -t; src='G'; }
+  }
+  if(attr) src='A';
+  let text = d.text || (nom!==null ? String(nom) : '');
+  if(type==='D' && text && !/^[Ø⌀]/.test(text)) text = 'Ø'+text;
+  if(type==='A' && text && !/°$/.test(text)) text += '°';
+  return { feat:d.feat||'', type, text, nom:nomV, up, lo, src, attr, tolNom:!!d.tolNom, boxed:!!d.boxed, view:d.view||'', inst:d.inst||'',
+           s: Array.isArray(d.s) ? d.s.slice(0,N).concat(Array(N).fill('')).slice(0,N) : Array(N).fill('') };
+}
+
+function newInfo(){
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return { reportNo:`FPI-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`,
+    date:`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`, customer:'', machine:'', operator:'', shift:'A',
+    inspector:'', lotQty:'', reason:'New setup', remarks:'' };
+}
+
+function loadData(data, fresh){
+  const gt = (data.genTol && data.genTol.length) ? data.genTol : DEF_GENTOL;
+  const angTol = num(data.angTol);
+  N = Math.min(10, Math.max(1, +data.n || 5));
+  S = {
+    header: Object.assign({partName:'',drawingNo:'',revision:'',material:'',usedOn:''}, data.header||{}),
+    genTol: gt, angTol,
+    dims: (data.dims||[]).map(d => d.src ? Object.assign({}, d, {s:Array(N).fill(''), note:''}) : normDim(d, gt, angTol)),
+    info: newInfo()
+  };
+  render();
+}
+
+/* ================= Render ================= */
+function dec(...vals){ return Math.max(1, ...vals.filter(v=>v!==null).map(v => (String(v).split('.')[1]||'').length)); }
+function limits(d){
+  if(d.attr || d.nom===null || d.up===null || d.lo===null) return {lsl:null, usl:null, dp:1};
+  const dp = dec(d.nom, d.up, d.lo);
+  return { lsl:+(d.nom + d.lo).toFixed(dp), usl:+(d.nom + d.up).toFixed(dp), dp };
+}
+function judge(d, v){
+  if(v===''||v===null||v===undefined) return '';
+  if(d.attr){ const u = String(v).trim().toUpperCase(); return u==='OK' ? 'ok' : u==='NOK' ? 'nok' : ''; }
+  const x = num(v); const {lsl, usl} = limits(d);
+  if(x===null || lsl===null) return '';
+  return (x >= lsl - 1e-9 && x <= usl + 1e-9) ? 'ok' : 'nok';
+}
+// Merged readings: one note across the 5 sample columns (default for gauge rows)
+const isMerged = d => d.merge ?? !!d.attr;
+function noteJudge(v){
+  const u = String(v||'').trim().toUpperCase();
+  if(!u) return '';
+  if(/\b(NOK|NOT\s*OK|N\.?G\.?|REJ\w*|FAIL\w*)\b/.test(u)) return 'nok';
+  if(/\b(OK|ACC\w*|PASS\w*|GOOD)\b/.test(u)) return 'ok';
+  return '';
+}
+function rowResult(d){
+  if(d.resManual === 'OK' || d.resManual === 'NOK') return d.resManual;
+  if(isMerged(d)){ const j = noteJudge(d.note); return j ? j.toUpperCase() : ''; }
+  const j = d.s.map(v => judge(d, v));
+  if(j.includes('nok')) return 'NOK';
+  if(j.filter(x=>x==='ok').length === N) return 'OK';
+  return '';
+}
+const fmtTol = v => v===null ? '' : (v>0?'+':'') + v;
+
+function render(){
+  $('empty').hidden = true; $('sheet').hidden = false;
+  ['btnPrint','btnPdf','btnSave','btnSaveMaster','btnNew'].forEach(id => $(id).disabled = false);
+  const h = S.header, i = S.info;
+  const inp = (obj, k, extra='') => `<input data-o="${obj}" data-k="${k}" value="${esc((obj==='h'?h:i)[k])}" ${extra}>`;
+  const gtText = S.genTol.map(r => `<span>${r.from} to ${r.to} mm: ±${r.tol}</span>`).join('') + (S.angTol!=null?`<span>Angles: ±${S.angTol}°</span>`:'');
+
+  let html = `
+  <table class="tb">
+    <tr><td colspan="4" class="co"><div class="cowrap"><img src="${LOGO}" alt="TVL logo"><span>${esc(CFG.co)}</span></div></td><td colspan="2" class="title">FIRST PART INSPECTION REPORT</td>
+        <td class="lbl">Format</td><td>${esc(CFG.fmt)}</td></tr>
+    <tr><td class="lbl">Part name</td><td colspan="3">${inp('h','partName')}</td>
+        <td class="lbl">Report no.</td><td>${inp('i','reportNo')}</td><td class="lbl">Date</td><td>${inp('i','date','type="date"')}</td></tr>
+    <tr><td class="lbl">Drawing no.</td><td>${inp('h','drawingNo')}</td><td class="lbl">Rev.</td><td>${inp('h','revision')}</td>
+        <td class="lbl">Customer</td><td>${inp('i','customer')}</td><td class="lbl">Shift</td>
+        <td><select data-o="i" data-k="shift">${['A','B','C','General'].map(x=>`<option ${i.shift===x?'selected':''}>${x}</option>`).join('')}</select></td></tr>
+    <tr><td class="lbl">Material</td><td>${inp('h','material')}</td><td class="lbl">Used on</td><td>${inp('h','usedOn')}</td>
+        <td class="lbl">Machine</td><td>${inp('i','machine')}</td><td class="lbl">Lot qty</td><td>${inp('i','lotQty')}</td></tr>
+    <tr><td class="lbl">FPI reason</td><td colspan="3"><select data-o="i" data-k="reason">${['New setup','Tool change','Shift start','After breakdown','Material change','Program change'].map(x=>`<option ${i.reason===x?'selected':''}>${x}</option>`).join('')}</select></td>
+        <td class="lbl">Operator</td><td>${inp('i','operator')}</td><td class="lbl">Inspector</td><td>${inp('i','inspector')}</td></tr>
+  </table>
+  <div class="gt">General tolerance: ${gtText}</div>
+
+  <table class="dt" id="dt">
+    <colgroup><col style="width:3%"><col style="width:13%"><col style="width:8.5%"><col style="width:5%"><col style="width:5%">
+      <col style="width:7%"><col style="width:7%"><col style="width:10%">${`<col style="width:${(31/N).toFixed(2)}%">`.repeat(N)}<col style="width:6%"><col class="noprint" style="width:6%"></colgroup>
+    <thead><tr><th rowspan="2">Sr.</th><th rowspan="2">Characteristic</th><th rowspan="2">Nominal</th><th colspan="2">Tolerance</th>
+      <th rowspan="2">LSL</th><th rowspan="2">USL</th><th rowspan="2">Instrument</th><th colspan="${N}">Observed readings</th><th rowspan="2">Result</th><th rowspan="2" class="noprint"></th></tr>
+      <tr><th>+</th><th>−</th>${Array.from({length:N},(_,k)=>`<th>${k+1}</th>`).join('')}</tr></thead>
+    <tbody>`;
+  let lastView = null;
+  S.dims.forEach((d, r) => {
+    if(d.view && d.view !== lastView){ html += `<tr class="vrow"><td colspan="${9+N}">${esc(d.view)}</td><td class="noprint"></td></tr>`; lastView = d.view; }
+    html += rowHtml(d, r);
+  });
+  html += `</tbody></table>
+  <div class="legend">Boxed nominal = boxed on drawing. Amber limits = no tolerance on drawing, fill manually. Gauge rows: write a note with OK or NOT OK. Keyboard: <b>Enter</b> = next reading, <b>Shift+Enter</b> = back, <b>arrow keys</b> = move cell to cell.</div>
+  <div class="tools noprint">
+    <button class="btn ghost" id="addRow">Add row</button>
+    <span class="smp">Samples <button class="btn ghost" id="smpMinus" aria-label="Remove a sample column">−</button><b id="smpN">${N}</b><button class="btn ghost" id="smpPlus" aria-label="Add a sample column">+</button></span>
+    <button class="btn ghost" id="gaugeOk">Mark all gauge rows OK</button>
+  </div>
+  <div class="sum">
+    <div>Decision<div class="dec" id="decision"></div><div id="decNote" class="note"></div></div>
+    <div>Remarks<textarea data-o="i" data-k="remarks">${esc(i.remarks)}</textarea></div>
+  </div>
+  <div class="sig"><div>Inspected by (QA)</div><div>Approved by</div></div>`;
+  $('sheet').innerHTML = html;
+  bindSheet(); updateDecision();
+}
+
+function rowHtml(d, r){
+  const {lsl, usl, dp} = limits(d);
+  const noTol = !d.attr && lsl===null;
+  const res = rowResult(d);
+  const lv = d.attr ? (d.lslTxt ?? 'Go') : (lsl===null ? '' : lsl.toFixed(dp));
+  const uv = d.attr ? (d.uslTxt ?? 'NoGo') : (usl===null ? '' : usl.toFixed(dp));
+  const tip = 'Type a limit value, or Go / NoGo / text for a gauge check';
+  return `<tr data-r="${r}">
+    <td class="drag" title="Drag to move this row">${r+1}</td>
+    <td class="l"><input data-f="feat" value="${esc(d.feat)}"></td>
+    <td class="${d.boxed?'box':''}"><input data-f="text" value="${esc(d.text)}" title="Nominal as on drawing"></td>
+    <td>${d.attr?'':`<input data-f="up" value="${esc(fmtTol(d.up))}">`}</td>
+    <td>${d.attr?'':`<input data-f="lo" value="${esc(fmtTol(d.lo))}">`}</td>
+    <td class="calc ${noTol?'ref':''}" data-c="lsl"><input data-f="lsl" value="${esc(lv)}" placeholder="n/a" title="${tip}"></td>
+    <td class="calc ${noTol?'ref':''}" data-c="usl"><input data-f="usl" value="${esc(uv)}" placeholder="n/a" title="${tip}"></td>
+    <td class="l"><input data-f="inst" value="${esc(d.inst)}"></td>
+    ${isMerged(d)
+      ? `<td class="s mg ${noteJudge(d.note)}" colspan="${N}"><input data-f="note" value="${esc(d.note||'')}" placeholder="Write your comment, then choose Result →"></td>`
+      : d.s.map((v,k)=>`<td class="s ${judge(d,v)}"><input data-f="s" data-k="${k}" value="${esc(v)}" ${d.attr?'':'inputmode="decimal"'}></td>`).join('')}
+    <td class="res ${res.toLowerCase()} ${d.resManual?'man':''}" data-c="res">${resSelect(d)}</td>
+    <td class="noprint act"><button class="del mvb" data-up="${r}" title="Move up" aria-label="Move row ${r+1} up" ${r===0?'disabled':''}>▲</button><button class="del mvb" data-down="${r}" title="Move down" aria-label="Move row ${r+1} down" ${r===S.dims.length-1?'disabled':''}>▼</button><button class="del mgb" data-merge="${r}" title="${isMerged(d)?'Split into '+N+' sample cells':'Merge samples into one comment'}" aria-label="Merge or split readings row ${r+1}">${isMerged(d)?'⇹':'⇔'}</button><button class="del" data-del="${r}" title="Delete row" aria-label="Delete row ${r+1}">×</button></td>
+  </tr>`;
+}
+
+// Result cell: Auto (from readings / comment) or chosen by hand
+function autoResult(d){ const m = d.resManual; d.resManual = ''; const a = rowResult(d); d.resManual = m; return a; }
+function resSelect(d){
+  const a = autoResult(d), m = d.resManual || '';
+  return `<select data-f="res" title="Auto = from readings. Or choose OK / NOT OK yourself" aria-label="Result">
+    <option value="" ${!m?'selected':''}>${a ? a : '—'}</option>
+    <option value="OK" ${m==='OK'?'selected':''}>OK</option>
+    <option value="NOK" ${m==='NOK'?'selected':''}>NOT OK</option></select>`;
+}
+
+function refreshRow(r){
+  const tr = document.querySelector(`#dt tr[data-r="${r}"]`); const d = S.dims[r];
+  const {lsl, usl, dp} = limits(d);
+  if(!d.attr){
+    const noTol = lsl===null;
+    const L = tr.querySelector('[data-c="lsl"]'), U = tr.querySelector('[data-c="usl"]');
+    const Li = L.querySelector('input'), Ui = U.querySelector('input');
+    if(Li !== document.activeElement) Li.value = lsl===null ? '' : lsl.toFixed(dp);
+    if(Ui !== document.activeElement) Ui.value = usl===null ? '' : usl.toFixed(dp);
+    L.classList.toggle('ref', noTol); U.classList.toggle('ref', noTol);
+  }
+  tr.querySelectorAll('td.s').forEach((td,k) => { td.classList.remove('ok','nok'); const j = isMerged(d) ? noteJudge(d.note) : judge(d, d.s[k]); if(j) td.classList.add(j); });
+  const res = rowResult(d), rc = tr.querySelector('[data-c="res"]');
+  rc.className = 'res ' + res.toLowerCase() + (d.resManual ? ' man' : '');
+  const sel = rc.querySelector('select');
+  if(sel && sel !== document.activeElement) rc.innerHTML = resSelect(d);
+  updateDecision();
+}
+
+function updateDecision(){
+  const res = S.dims.map(rowResult);
+  const nok = res.filter(x=>x==='NOK').length, ok = res.filter(x=>x==='OK').length, pend = res.length - nok - ok;
+  const el = $('decision');
+  if(nok){ el.textContent = 'REJECTED'; el.className='dec nok'; }
+  else if(!pend && res.length){ el.textContent = 'ACCEPTED'; el.className='dec ok'; }
+  else { el.textContent = 'PENDING'; el.className='dec pend'; }
+  $('decNote').textContent = `${ok} OK, ${nok} NOK, ${pend} incomplete of ${res.length} characteristics`;
+  S.decision = el.textContent;
+}
+
+/* ---- Tolerance entry helpers ---- */
+// "+" column: value as typed (0.1 -> +0.1, -0.02 stays -0.02). "±0.1" fills both.
+// "−" column: plain number is taken as minus (0.1 -> -0.1). Type "+0.05" only if lower limit is above nominal.
+function parseTol(field, raw){
+  const s = String(raw||'').trim().replace(/[−–]/g,'-').replace(/\s+/g,'');
+  if(!s) return {val:null};
+  const pm = s.match(/^(±|\+\/-|\+-)(\d*\.?\d+)$/);
+  if(pm){ const v = parseFloat(pm[2]); return {both:true, up:v, lo:-v}; }
+  const v = num(s); if(v===null) return {val:null};
+  if(field==='up') return {val:v};
+  return {val: s.startsWith('+') ? Math.abs(v) : -Math.abs(v)};
+}
+// Tolerance written inside nominal: "Ø6.3 +0.10/-0.02", "16.0 ±0.1", "20 +0.2 -0.1"
+function splitNominal(text){
+  const t = String(text||'').replace(/[−–]/g,'-');
+  let m = t.match(/^(.*?\d)\s*(?:±|\+\/-)\s*(\d*\.?\d+)\s*$/);
+  if(m) return {text:m[1].trim(), up:+m[2], lo:-m[2]};
+  m = t.match(/^(.*?\d)\s*\+\s*(\d*\.?\d+)\s*\/?\s*-\s*(\d*\.?\d+)\s*$/);
+  if(m) return {text:m[1].trim(), up:+m[2], lo:-m[3]};
+  m = t.match(/^(.*?\d)\s*-\s*(\d*\.?\d+)\s*\/?\s*\+\s*(\d*\.?\d+)\s*$/);
+  if(m) return {text:m[1].trim(), up:+m[3], lo:-m[2]};
+  return null;
+}
+function firstNum(text){ const m = String(text||'').replace(',', '.').match(/\d*\.?\d+/); return m ? parseFloat(m[0]) : null; }
+// Read nominal cell: range "R0.3 - 0.4" / "20 - 25°", inline tol "0.9 ±0.15" / "27.0 +0 -0.4", or plain "48.2"
+function analyzeNominal(text){
+  const t = String(text||'').replace(/[−–—]/g,'-').replace(/,/g,'.').trim();
+  if(!t) return null;
+  const rg = t.match(/^(.*?)(\d*\.?\d+)\s*(?:-|to|~)\s*(\d*\.?\d+)\s*(°)?\s*$/i);
+  if(rg && !/\d/.test(rg[1])){
+    const a = +rg[2], b = +rg[3];
+    if(b > a){ const h = +((b-a)/2).toFixed(4); return {nom:+((a+b)/2).toFixed(4), up:h, lo:-h, hasTol:true, range:true}; }
+  }
+  const sp = splitNominal(t);
+  if(sp) return {nom:firstNum(sp.text), up:sp.up, lo:sp.lo, hasTol:true, clean:sp.text};
+  const n = firstNum(t);
+  return n===null ? null : {nom:n, hasTol:false};
+}
+// Apply nominal change to a row: new limits from the nominal text, or general tolerance for the new size band
+function applyNominal(d){
+  if(d.attr) return;
+  const an = analyzeNominal(d.text);
+  if(!an){ d.nom = null; return; }
+  d.nom = an.nom;
+  if(an.hasTol){ d.up = an.up; d.lo = an.lo; d.src = 'E'; d.tolNom = true; return; }
+  if(d.tolNom || d.src === 'G' || d.src === '-' || (d.up === null && d.lo === null)){
+    d.tolNom = false;
+    if(d.type === 'A'){ if(S.angTol != null){ d.up = S.angTol; d.lo = -S.angTol; d.src = 'G'; } else { d.up = d.lo = null; d.src = '-'; } }
+    else { const g = genTolFor(d.nom, S.genTol); d.up = g; d.lo = -g; d.src = 'G'; }
+  }
+}
+const isNumTxt = v => /^[+\-]?\d*[.,]?\d+$/.test(String(v ?? '').trim());
+const toNum = v => parseFloat(String(v).trim().replace(',', '.'));
+function setTolInputs(tr, d, skip){
+  ['up','lo'].forEach(f => { const el = tr.querySelector(`input[data-f="${f}"]`); if(el && el !== skip) el.value = fmtTol(d[f]); });
+}
+
+/* ---- Keyboard cell navigation ---- */
+function cellKey(inp){ return inp.dataset.f === 's' ? 's' + inp.dataset.k : inp.dataset.f; }
+function rowInputs(r){ return [...document.querySelectorAll(`#dt tr[data-r="${r}"] input`)]; }
+function findCell(r, key){
+  const tr = document.querySelector(`#dt tr[data-r="${r}"]`); if(!tr) return null;
+  if(/^s\d$/.test(key)) return tr.querySelector(`input[data-f="s"][data-k="${key[1]}"]`) || tr.querySelector('input[data-f="note"]');
+  if(key === 'note') return tr.querySelector('input[data-f="note"]') || tr.querySelector('input[data-f="s"][data-k="0"]');
+  return tr.querySelector(`input[data-f="${key}"]`) || tr.querySelector('input[data-f="s"][data-k="0"]');
+}
+let lastSampleK = 0;
+function vertical(r, key, step){
+  if(key === 'note') key = 's' + lastSampleK;
+  for(let rr = r + step; rr >= 0 && rr < S.dims.length; rr += step){
+    const el = findCell(rr, key); if(el) return { r: rr, key: cellKey(el) === 'note' ? 'note' : key };
+  }
+  return null;
+}
+function horizontal(r, t, step){
+  const list = rowInputs(r), i = list.indexOf(t) + step;
+  if(i >= 0 && i < list.length) return { r, key: cellKey(list[i]) };
+  const rr = r + step; if(rr < 0 || rr >= S.dims.length) return null;
+  const l2 = rowInputs(rr); const el = step > 0 ? l2[0] : l2[l2.length - 1];
+  return el ? { r: rr, key: cellKey(el) } : null;
+}
+function nextReading(r, t, step){
+  if(t.dataset.f === 's'){ const k = +t.dataset.k + step; if(k >= 0 && k < N) return { r, key: 's' + k }; }
+  const rr = r + step; if(rr < 0 || rr >= S.dims.length) return null;
+  return { r: rr, key: step > 0 ? 's0' : 's' + (N - 1) };
+}
+function goCell(from, dest){
+  from.blur();                                   // commits the value (may redraw the row)
+  const el = findCell(dest.r, dest.key); if(!el) return;
+  el.focus(); el.select();
+  if(el.dataset.f === 's') lastSampleK = +el.dataset.k;
+  el.closest('tr').scrollIntoView({ block:'nearest' });
+}
+
+/* ---- Move rows ---- */
+// Moved row joins the view group it lands in (e.g. from End view into Section A-A)
+function moveRow(from, to){
+  if(to < 0 || to >= S.dims.length || from === to) return;
+  const [d] = S.dims.splice(from, 1);
+  S.dims.splice(to, 0, d);
+  const up = S.dims[to-1], dn = S.dims[to+1];
+  if(up && dn && up.view === dn.view) d.view = up.view;
+  else if(up && dn){ if(d.view !== up.view && d.view !== dn.view) d.view = up.view; }
+  else if(up) d.view = up.view; else if(dn) d.view = dn.view;
+  render(); flashRow(to);
+}
+function flashRow(r){
+  const tr = document.querySelector(`#dt tr[data-r="${r}"]`);
+  if(tr){ tr.classList.add('moved'); setTimeout(() => tr.classList.remove('moved'), 900); }
+}
+
+function bindSheet(){
+  const sheet = $('sheet');
+  sheet.oninput = e => {
+    const t = e.target;
+    if(t.dataset.o){ (t.dataset.o==='h'?S.header:S.info)[t.dataset.k] = t.value; return; }
+    const tr = t.closest('tr[data-r]'); if(!tr) return;
+    const r = +tr.dataset.r, d = S.dims[r], f = t.dataset.f;
+    if(f==='s') d.s[+t.dataset.k] = t.value;
+    else if(f==='note') d.note = t.value;
+    else if(f==='up' || f==='lo'){
+      const p = parseTol(f, t.value), other = f==='up' ? 'lo' : 'up';
+      if(p.both){ d.up = p.up; d.lo = p.lo; setTolInputs(tr, d, t); }
+      else {
+        const had = d[other] !== null;
+        d[f] = p.val;
+        if(p.val !== null && !had){ d[other] = -p.val; setTolInputs(tr, d, t); } // other side empty -> make symmetric
+      }
+      d.src = 'E'; d.tolNom = false;
+    }
+    else if(f==='text'){ d.text = t.value; applyNominal(d); setTolInputs(tr, d, null); }
+    else if(f==='lsl' || f==='usl'){
+      const v = t.value.trim();
+      if(d.attr){ d[f+'Txt'] = v; return; }                       // gauge row: free text, checked on leave
+      if(isNumTxt(v) && d.nom !== null){
+        const n = toNum(v);
+        if(f==='lsl') d.lo = +(n - d.nom).toFixed(4); else d.up = +(n - d.nom).toFixed(4);
+        d.src = 'E'; d.tolNom = false; setTolInputs(tr, d, null);
+      } else if(v === '' ){ if(f==='lsl') d.lo = null; else d.up = null; setTolInputs(tr, d, null); }
+    }
+    else if(f==='res'){ d.resManual = t.value; }
+    else d[f] = t.value;
+    refreshRow(r);
+  };
+  sheet.onchange = e => {
+    const t = e.target;
+    if(t.dataset.o){ (t.dataset.o==='h'?S.header:S.info)[t.dataset.k] = t.value; return; }
+    const trc = t.closest('tr[data-r]');
+    if(trc && (t.dataset.f==='up' || t.dataset.f==='lo')){          // tidy display: 0.1 -> +0.1 / -0.1
+      const d = S.dims[+trc.dataset.r]; setTolInputs(trc, d, null); refreshRow(+trc.dataset.r); return;
+    }
+    if(trc && (t.dataset.f==='lsl' || t.dataset.f==='usl')){
+      const r = +trc.dataset.r, d = S.dims[r], f = t.dataset.f, v = t.value.trim();
+      if(!d.attr && v !== '' && !isNumTxt(v)){                        // text typed -> gauge (OK/NOK) row
+        d.attr = true; d.lslTxt = f==='lsl' ? v : 'Go'; d.uslTxt = f==='usl' ? v : 'NoGo';
+        d.s = Array(N).fill(''); render(); status(`Row ${r+1} changed to gauge check (OK / NOK).`, 'ok'); return;
+      }
+      if(d.attr){
+        d[f+'Txt'] = v;
+        if(isNumTxt(d.lslTxt) && isNumTxt(d.uslTxt) && toNum(d.uslTxt) > toNum(d.lslTxt)){   // both numbers -> measured row
+          const a = toNum(d.lslTxt), b = toNum(d.uslTxt);
+          let n = firstNum(d.text); if(n === null || n < a || n > b) n = +((a+b)/2).toFixed(4);
+          d.attr = false; d.nom = n; d.lo = +(a-n).toFixed(4); d.up = +(b-n).toFixed(4); d.src = 'E'; d.tolNom = false;
+          if(d.type==='T' || d.type==='N') d.type = 'L';
+          if(!d.text) d.text = String(n);
+          d.s = Array(N).fill(''); render(); status(`Row ${r+1} changed to measured values (${a} to ${b}).`, 'ok');
+        }
+        return;
+      }
+      if(isNumTxt(v) && d.nom === null){                              // no nominal yet: use this limit as nominal
+        d.nom = toNum(v); if(f==='lsl') d.lo = 0; else d.up = 0; if(!d.text) d.text = v; d.src = 'E';
+        trc.querySelector('input[data-f="text"]').value = d.text;
+      }
+      setTolInputs(trc, d, null); refreshRow(r); return;
+    }
+    if(trc && t.dataset.f==='text'){                                  // tolerance typed inside nominal -> move to +/- columns
+      const r = +trc.dataset.r, d = S.dims[r], an = analyzeNominal(t.value);
+      if(an && an.clean && !d.attr){          // tolerance now lives in the +/- columns
+        d.text = an.clean; t.value = an.clean; d.nom = an.nom; d.up = an.up; d.lo = an.lo; d.src = 'E'; d.tolNom = false;
+      } else applyNominal(d);
+      setTolInputs(trc, d, null); refreshRow(r);
+      return;
+    }
+    if(t.dataset.f==='s'){
+      const r = +t.closest('tr').dataset.r, d = S.dims[r];
+      if(d.attr){
+        const u = t.value.trim().toUpperCase();
+        t.value = !u ? '' : /^(N|R|X|0)/.test(u) ? 'NOK' : /^(O|Y|1|G|A)/.test(u) ? 'OK' : u;
+        d.s[+t.dataset.k] = t.value; refreshRow(r);
+      }
+    }
+  };
+  // Drag a row by its Sr. number and drop it on another row
+  let dragFrom = null;
+  sheet.onmousedown = e => { const td = e.target.closest('td.drag'); if(td) td.parentElement.draggable = true; };
+  sheet.ondragstart = e => {
+    const tr = e.target.closest && e.target.closest('tr[data-r]'); if(!tr) return;
+    dragFrom = +tr.dataset.r; tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', String(dragFrom)); }catch(_){}
+  };
+  const clearDrop = () => sheet.querySelectorAll('.dropA,.dropB').forEach(x => x.classList.remove('dropA','dropB'));
+  sheet.ondragover = e => {
+    if(dragFrom === null) return;
+    const tr = e.target.closest('tr[data-r]'); if(!tr) return;
+    e.preventDefault(); clearDrop();
+    const box = tr.getBoundingClientRect();
+    tr.classList.add(e.clientY < box.top + box.height/2 ? 'dropA' : 'dropB');
+  };
+  sheet.ondrop = e => {
+    if(dragFrom === null) return;
+    const tr = e.target.closest('tr[data-r]'); if(!tr){ return; }
+    e.preventDefault();
+    const box = tr.getBoundingClientRect(), after = e.clientY >= box.top + box.height/2;
+    let to = +tr.dataset.r + (after ? 1 : 0);
+    if(to > dragFrom) to--;
+    const from = dragFrom; dragFrom = null; clearDrop();
+    moveRow(from, to);
+  };
+  sheet.ondragend = () => { dragFrom = null; clearDrop(); sheet.querySelectorAll('tr[draggable]').forEach(x => { x.draggable = false; x.classList.remove('dragging'); }); };
+
+  // Keyboard: arrows move cell to cell, Enter goes to next reading (or down in other columns)
+  sheet.onkeydown = e => {
+    const t = e.target;
+    if(t.tagName !== 'INPUT' || !t.dataset.f || !t.closest('#dt')) return;
+    const r = +t.closest('tr[data-r]').dataset.r, key = cellKey(t), k = e.key;
+    const atStart = t.selectionStart === 0 && t.selectionEnd === 0;
+    const atEnd = t.selectionStart === t.value.length && t.selectionEnd === t.value.length;
+    const allSel = t.value.length > 0 && t.selectionStart === 0 && t.selectionEnd === t.value.length;
+    let dest = null;
+    if(k === 'ArrowUp')   dest = vertical(r, key, -1);
+    else if(k === 'ArrowDown') dest = vertical(r, key, 1);
+    else if(k === 'ArrowLeft'  && (atStart || allSel || !t.value)) dest = horizontal(r, t, -1);
+    else if(k === 'ArrowRight' && (atEnd   || allSel || !t.value)) dest = horizontal(r, t, 1);
+    else if(k === 'Enter'){
+      const step = e.shiftKey ? -1 : 1;
+      dest = /^s\d$/.test(key) || t.dataset.f === 'note' ? nextReading(r, t, step) : vertical(r, key, step);
+      if(!dest) t.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+    else return;
+    e.preventDefault();
+    if(dest) goCell(t, dest);
+  };
+  sheet.onclick = e => {
+    const del = e.target.dataset.del;
+    if(del !== undefined){ if(confirm('Delete row '+(+del+1)+'?')){ S.dims.splice(+del,1); render(); } }
+    if(e.target.id==='smpPlus' || e.target.id==='smpMinus'){
+      const n = N + (e.target.id==='smpPlus' ? 1 : -1);
+      if(n < 1 || n > 10){ status('Samples can be 1 to 10.', 'err'); return; }
+      if(n < N && S.dims.some(d => String(d.s[N-1]||'').trim()) && !confirm(`Sample ${N} has readings. Remove that column?`)) return;
+      N = n; S.dims.forEach(d => d.s = fitS(d.s, N)); render(); status(`Samples per row: ${N}.`, 'ok'); return;
+    }
+    if(e.target.id==='addRow'){ S.dims.push(normDim({feat:'',type:'L',text:'',nom:null,view:(S.dims.at(-1)||{}).view||''}, S.genTol, S.angTol)); S.dims.at(-1).attr=false; S.dims.at(-1).src='-'; render(); }
+    const bt = e.target.closest('button');
+    if(bt && (bt.dataset.up !== undefined || bt.dataset.down !== undefined)){
+      const r = +(bt.dataset.up ?? bt.dataset.down), step = bt.dataset.up !== undefined ? -1 : 1, d = S.dims[r], nb = S.dims[r + step];
+      if(nb && nb.view !== d.view){ d.view = nb.view; render(); flashRow(r); }   // first/last row of a group: step into next group
+      else moveRow(r, r + step);
+      return;
+    }
+    if(e.target.dataset.merge !== undefined){ const d = S.dims[+e.target.dataset.merge]; d.merge = !isMerged(d); render(); }
+    if(e.target.id==='gaugeOk'){ S.dims.forEach(d => { if(d.attr){ if(isMerged(d)){ if(!String(d.note||'').trim()) d.note = `All ${N} samples OK`; } else d.s = d.s.map(v => String(v).trim() ? v : 'OK'); } }); render(); status('Empty gauge rows marked OK. Rows already filled were not changed.', 'ok'); }
+  };
+}
+
+/* ================= Actions ================= */
+/* ================= Print (browser print, no pop-up, fits 2 pages) ================= */
+function buildPrintView(){
+  if(!S) return false;
+  let pv = document.getElementById('printView');
+  if(!pv){ pv = document.createElement('div'); pv.id = 'printView'; document.body.appendChild(pv); }
+  const h = S.header, i = S.info;
+  const res = S.dims.map(rowResult), nOk = res.filter(x=>x==='OK').length, nNok = res.filter(x=>x==='NOK').length;
+  const dec = S.decision || 'PENDING', decC = dec==='ACCEPTED' ? '#1d7a3b' : dec==='REJECTED' ? '#b42318' : '#9a5a00';
+  const gt = S.genTol.map(r => `${r.from} to ${r.to} mm: ±${r.tol}`).join('&nbsp;&nbsp;&nbsp;') + (S.angTol != null ? `&nbsp;&nbsp;&nbsp;Angles: ±${S.angTol}°` : '');
+
+  // rows (with view headings) and height so everything fits on 2 A4 landscape pages
+  let rowsHtml = '', count = 0, lastView = null;
+  S.dims.forEach((d, r) => {
+    if(d.view && d.view !== lastView){ rowsHtml += `<tr class="g"><td colspan="${9+N}">${esc(d.view)}</td></tr>`; lastView = d.view; count++; }
+    const { lsl, usl, dp } = limits(d);
+    const lv = d.attr ? (d.lslTxt ?? 'Go') : (lsl===null ? 'n/a' : lsl.toFixed(dp));
+    const uv = d.attr ? (d.uslTxt ?? 'NoGo') : (usl===null ? 'n/a' : usl.toFixed(dp));
+    const rr = rowResult(d);
+    const cells = isMerged(d)
+      ? `<td colspan="${N}" class="b ${noteJudge(d.note)}">${esc(d.note||'')}</td>`
+      : d.s.map(v => `<td class="${judge(d, v)}">${esc(v)}</td>`).join('');
+    rowsHtml += `<tr><td>${r+1}</td><td class="l">${esc(d.feat)}</td><td class="${d.boxed?'b':''}">${esc(d.text)}</td>
+      <td>${d.attr?'':esc(fmtTol(d.up))}</td><td>${d.attr?'':esc(fmtTol(d.lo))}</td>
+      <td class="${!d.attr&&lsl===null?'w':'m'}">${esc(lv)}</td><td class="${!d.attr&&usl===null?'w':'m'}">${esc(uv)}</td>
+      <td class="l">${esc(d.inst)}</td>${cells}<td class="b ${rr==='NOK'?'nok':rr==='OK'?'ok':''}">${rr}</td></tr>`;
+    count++;
+  });
+  const remLinesEst = Math.max(1, Math.ceil(String(i.remarks||'').length / 150));
+  const summary = Math.max(16, remLinesEst * 4 + 10) + 15 + 3;
+  const avail = (198 - 33 - 5 - 8.5) + (198 - 8.5 - summary) - 8;
+  const rh = Math.max(3.4, Math.min(6.5, avail / Math.max(1, count)));
+  const fs = Math.max(6, Math.min(9, rh * 1.75));
+
+  const sw = (285 - 185) / N;
+  pv.innerHTML = `
+  <style>@media print{ .pv-dt td{height:${rh.toFixed(2)}mm;font-size:${fs.toFixed(1)}pt} }</style>
+  <table class="pv-tb">
+    <colgroup><col style="width:20mm"><col style="width:64mm"><col style="width:16mm"><col style="width:44mm"><col style="width:22mm"><col style="width:58mm"><col style="width:16mm"><col style="width:45mm"></colgroup>
+    <tr><td colspan="4" class="co"><img src="${LOGO}" alt="">${esc(CFG.co)}</td><td colspan="2" class="ti">FIRST PART INSPECTION REPORT</td><td class="lb">Format</td><td class="v">${esc(CFG.fmt)}</td></tr>
+    <tr><td class="lb">Part name</td><td colspan="3" class="v">${esc(h.partName)}</td><td class="lb">Report no.</td><td class="v">${esc(i.reportNo)}</td><td class="lb">Date</td><td class="v">${esc(fmtDateDMY(i.date))}</td></tr>
+    <tr><td class="lb">Drawing no.</td><td class="v">${esc(h.drawingNo)}</td><td class="lb">Rev.</td><td class="v">${esc(h.revision)}</td><td class="lb">Customer</td><td class="v">${esc(i.customer)}</td><td class="lb">Shift</td><td class="v">${esc(i.shift)}</td></tr>
+    <tr><td class="lb">Material</td><td class="v">${esc(h.material)}</td><td class="lb">Used on</td><td class="v">${esc(h.usedOn)}</td><td class="lb">Machine</td><td class="v">${esc(i.machine)}</td><td class="lb">Lot qty</td><td class="v">${esc(i.lotQty)}</td></tr>
+    <tr><td class="lb">FPI reason</td><td colspan="3" class="v">${esc(i.reason)}</td><td class="lb">Operator</td><td class="v">${esc(i.operator)}</td><td class="lb">Inspector</td><td class="v">${esc(i.inspector)}</td></tr>
+  </table>
+  <div class="pv-gt">General tolerance:&nbsp;&nbsp;${gt}</div>
+  <table class="pv-dt">
+    <colgroup><col style="width:7mm"><col style="width:47mm"><col style="width:31mm"><col style="width:11mm"><col style="width:11mm"><col style="width:17mm"><col style="width:17mm"><col style="width:31mm">${`<col style="width:${sw}mm">`.repeat(N)}<col style="width:13mm"></colgroup>
+    <thead>
+      <tr><th rowspan="2">Sr.</th><th rowspan="2">Characteristic</th><th rowspan="2">Nominal</th><th colspan="2">Tolerance</th><th rowspan="2">LSL</th><th rowspan="2">USL</th><th rowspan="2">Instrument</th><th colspan="${N}">Observed readings</th><th rowspan="2">Result</th></tr>
+      <tr><th>+</th><th>-</th>${Array.from({length:N},(_,k)=>`<th>${k+1}</th>`).join('')}</tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="pv-sum">
+    <div><div class="lb">Decision</div><div class="dec" style="color:${decC}">${dec}</div><div class="lb">${nOk} OK, ${nNok} NOK, ${res.length-nOk-nNok} incomplete of ${res.length} characteristics</div></div>
+    <div><div class="lb">Remarks</div><div class="rem">${esc(i.remarks||'')}</div></div>
+    <div class="pv-sig"><div>Inspected by (QA)</div><div>Approved by</div></div>
+  </div>`;
+  document.body.classList.add('pv-ready');
+  return true;
+}
+// Ctrl+P also prints the clean report
+window.addEventListener('beforeprint', () => { if(S) buildPrintView(); });
+window.addEventListener('afterprint', () => document.body.classList.remove('pv-ready'));
+
+$('btnPrint').onclick = () => {
+  if(!S) return;
+  try{ buildPrintView(); }catch(e){ status('Print failed: ' + e.message, 'err'); return; }
+  document.title = `${S.info.reportNo} ${S.header.drawingNo||''}`.trim();
+  if(S.decision === 'PENDING') status('Note: some readings are still empty.', 'err');
+  window.print();
+};
+
+$('btnNew').onclick = () => {
+  if(!confirm('Start a new report for this drawing? Current readings will be cleared.')) return;
+  S.dims.forEach(d => { d.s = Array(N).fill(''); d.note = ''; d.resManual = ''; }); S.info = newInfo(); render(); status('New report started.', 'ok');
+};
+
+function masterPayload(){
+  return { header:S.header, genTol:S.genTol, angTol:S.angTol, n:N,
+           dims:S.dims.map(d => ({feat:d.feat,type:d.type,text:d.text,nom:d.nom,up:d.up,lo:d.lo,src:d.src,tolNom:!!d.tolNom,attr:d.attr,merge:d.merge,lslTxt:d.lslTxt,uslTxt:d.uslTxt,boxed:d.boxed,view:d.view,inst:d.inst})) };
+}
+
+$('btnSaveMaster').onclick = async () => {
+  if(!S.header.drawingNo){ status('Enter the drawing no. before saving the list.', 'err'); return; }
+  busy(true, 'Saving dimension list');
+  try{ const r = await api('saveMaster', {master: masterPayload()}); status(`${r.drawingNo} ${r.updated?'updated':'saved'} in saved drawings.`, 'ok'); await loadMasters(r.drawingNo); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnLoadMaster').onclick = async () => {
+  const dn = $('masterSel').value; if(!dn){ status('Select a drawing no.', 'err'); return; }
+  busy(true, 'Loading '+dn);
+  try{ loadData(await api('getMaster', {drawingNo: dn})); status(dn+' loaded. Enter readings.', 'ok'); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnSave').onclick = async () => {
+  busy(true, 'Saving report');
+  try{
+    const rows = S.dims.map((d, r) => { const {lsl, usl} = limits(d);
+      return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: d.attr ? (d.lslTxt ?? 'Go') : (lsl??''), usl: d.attr ? (d.uslTxt ?? 'NoGo') : (usl??''), inst:d.inst, s: isMerged(d) ? [d.note||'','','','',''] : (N <= 5 ? fitS(d.s, 5) : d.s.slice(0,4).concat([d.s.slice(4).join(' / ')])), result: rowResult(d) }; });
+    const state = { header:S.header, genTol:S.genTol, angTol:S.angTol, n:N, info:S.info, dims:S.dims };
+    const repObj = { info:S.info, header:S.header, rows, decision:S.decision, state };
+    keepLocal(S.info.reportNo, JSON.parse(JSON.stringify(repObj)));
+    const r = await api('saveReport', { report: repObj });
+    status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK). Find it under Saved reports.`, 'ok');
+    await loadReports(r.reportNo);
+  }catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnDelMaster').onclick = async () => {
+  const dn = $('masterSel').value; if(!dn){ status('Select the drawing no. to delete.', 'err'); return; }
+  if(!confirm('Delete saved dimension list for ' + dn + '?\n\nSaved FPI reports are NOT deleted. You can read the drawing again later.')) return;
+  busy(true, 'Deleting ' + dn);
+  try{ await api('deleteMaster', {drawingNo: dn}); status(dn + ' deleted from saved drawings.', 'ok'); await loadMasters(); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+/* ---- Saved lists: instant from cache, refreshed from server in one call ---- */
+function fillMasters(list, select){
+  $('masterSel').innerHTML = `<option value="">${list.length ? 'Select drawing no. (' + list.length + ' saved)' : 'No saved drawings yet'}</option>` +
+    list.map(m => `<option value="${esc(m.drawingNo)}">${esc(m.drawingNo)}  ${esc(m.partName)} (${m.count})</option>`).join('');
+  const want = String(select || (S && S.header && S.header.drawingNo) || '').trim().toUpperCase();
+  const hit = list.find(m => String(m.drawingNo).toUpperCase() === want);
+  if(hit) $('masterSel').value = hit.drawingNo;
+}
+function fillReports(list, select){
+  const cur = select || $('repSel').value;
+  $('repSel').innerHTML = `<option value="">${list.length ? 'Select report (' + list.length + ')' : 'No saved reports yet'}</option>` +
+    list.map(r => `<option value="${esc(r.reportNo)}">${esc(r.date)} | ${esc(r.drawingNo)} | ${esc(r.decision)}${r.nok ? ' ('+r.nok+' NOK)' : ''} | ${esc(r.reportNo)}</option>`).join('');
+  if(cur) $('repSel').value = cur;
+}
+const readCache = k => { try{ return JSON.parse(LS.get(k, 'null')); }catch(e){ return null; } };
+async function refreshLists(selMaster, selReport){
+  if(!CFG.url) return;
+  try{
+    let d;
+    try{ d = await api('lists'); }
+    catch(e){                                   // older Code.gs without 'lists': two calls in parallel
+      if(!/Unknown action/.test(e.message)) throw e;
+      const [masters, reports] = await Promise.all([api('listMasters'), api('listReports').catch(() => [])]);
+      d = { masters, reports };
+    }
+    LS.set('cacheM', JSON.stringify(d.masters||[])); LS.set('cacheR', JSON.stringify(d.reports||[]));
+    fillMasters(d.masters||[], selMaster); fillReports(d.reports||[], selReport);
+  }catch(e){ status('Could not refresh saved lists: ' + e.message, 'err'); }
+}
+const loadMasters = sel => refreshLists(sel, null);
+const loadReports = sel => refreshLists(null, sel);
+
+// Old reports (saved before this update) have no full state: rebuild rows from the stored table
+function stateFromRows(rep){
+  const dims = (rep.rows || []).map(r => {
+    const attr = !isNumTxt(r.lsl);
+    const text = String(r.spec || '').replace(/\s+[+\-]?\d*\.?\d*\/[+\-]?\d*\.?\d*\s*$/, '');
+    const nom = attr ? null : firstNum(text);
+    return { feat:r.feat, type:attr?'T':'L', text, nom, attr, lslTxt: attr ? (r.lsl || 'Go') : undefined, uslTxt: attr ? (r.usl || 'NoGo') : undefined, src:'E', boxed:false, view:'', inst:r.inst||'',
+      up: attr||nom===null ? null : +(+r.usl - nom).toFixed(4), lo: attr||nom===null ? null : +(+r.lsl - nom).toFixed(4),
+      s: (r.s||[]).slice(0,N).concat(Array(N).fill('')).slice(0,N) };
+  });
+  return { header:rep.header||{}, genTol:DEF_GENTOL, angTol:null, info:rep.info||newInfo(), dims };
+}
+
+function keepLocal(no, rep){
+  try{
+    LS.set('rep:' + no, JSON.stringify(rep));
+    const idx = JSON.parse(LS.get('repIdx','[]')).filter(x => x !== no); idx.unshift(no);
+    idx.slice(40).forEach(x => { try{ localStorage.removeItem('tvlfpi_rep:' + x); }catch(e){} });
+    LS.set('repIdx', JSON.stringify(idx.slice(0, 40)));
+  }catch(e){}
+}
+async function openReport(no){
+  let rep = null;
+  try{ rep = JSON.parse(LS.get('rep:' + no, 'null')); }catch(e){}
+  if(!rep){ rep = await api('getReport', {reportNo: no}); if(rep && typeof rep === 'object') keepLocal(no, rep); }
+  if(!rep || typeof rep !== 'object') throw new Error('Report ' + no + ' could not be read from the sheet. Update Code.gs to the latest version and Deploy > Manage deployments > New version.');
+  const st = rep.state || stateFromRows(rep);
+  N = Math.min(10, Math.max(1, +st.n || (st.dims && st.dims[0] && st.dims[0].s ? st.dims[0].s.length : 5) || 5));
+  S = {
+    header: Object.assign({partName:'',drawingNo:'',revision:'',material:'',usedOn:''}, st.header||{}),
+    genTol: st.genTol || DEF_GENTOL, angTol: st.angTol ?? null,
+    dims: (st.dims||[]).map(d => Object.assign({}, d, { s: fitS(d.s, N) })),
+    info: Object.assign(newInfo(), st.info||{})
+  };
+  render();
+  $('sheet').scrollIntoView({block:'start'});
+}
+
+$('btnOpenRep').onclick = async () => {
+  const no = $('repSel').value; if(!no){ status('Select a saved report.', 'err'); return; }
+  busy(true, 'Opening ' + no);
+  try{ await openReport(no); status(no + ' opened. Print, download, or edit and Save report.', 'ok'); }
+  catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnDelRep').onclick = async () => {
+  const no = $('repSel').value; if(!no){ status('Select the report to delete.', 'err'); return; }
+  if(!confirm('Delete saved report ' + no + '?\n\nIts readings are removed from the sheet. This cannot be undone.')) return;
+  busy(true, 'Deleting ' + no);
+  try{
+    await api('deleteReport', {reportNo: no});
+    try{ localStorage.removeItem('tvlfpi_rep:' + no); }catch(e){}
+    const cache = (readCache('cacheR') || []).filter(r => r.reportNo !== no);
+    LS.set('cacheR', JSON.stringify(cache)); fillReports(cache, '');
+    status(no + ' deleted.', 'ok');
+    refreshLists();
+  }catch(e){ status(e.message, 'err'); }
+  busy(false);
+};
+
+$('btnPdfRep').onclick = async () => {
+  const no = $('repSel').value; if(!no){ status('Select a saved report.', 'err'); return; }
+  if(!S || S.info.reportNo !== no){
+    busy(true, 'Opening ' + no);
+    try{ await openReport(no); }
+    catch(e){ status(e.message, 'err'); busy(false); return; }
+    busy(false);
+  }
+  await downloadPdf();
+};
+
+/* ================= PDF download ================= */
+/* ================= PDF report (fixed layout, fits 2 pages) ================= */
+const PDF_ASCII = t => String(t ?? '').replace(/[−–—]/g,'-').replace(/[⌀]/g,'Ø').replace(/[“”]/g,'"').replace(/[‘’]/g,"'");
+function pdfName(){
+  const safe = x => String(x||'').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  return `${safe(S.info.reportNo)}_${safe(S.header.drawingNo)}.pdf`;
+}
+function fmtDateDMY(v){ const m = String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v||''); }
+
+function buildPdf(){
+  if(!window.jspdf || !window.jspdf.jsPDF) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
+  if(typeof doc.autoTable !== 'function') return null;
+
+  const PW = 297, PH = 210, M = 6, W = PW - 2*M;
+  const INK = [27,39,51], MUTED = [91,107,123], BLUE = [31,79,122], HEAD = [230,238,246], GRP = [241,244,247];
+  const OKF = [227,243,232], OKT = [29,122,59], NOKF = [251,228,225], NOKT = [180,35,24], WARN = [154,90,0];
+  const h = S.header, i = S.info, T = PDF_ASCII;
+  const line = { lineColor: INK, lineWidth: 0.2 };
+
+  /* ---- title block ---- */
+  const L = (t) => ({ content:t, styles:{ fontSize:6.5, textColor:MUTED, fontStyle:'normal' } });
+  const V = (t, span) => ({ content:T(t), colSpan: span||1, styles:{ fontStyle:'bold' } });
+  doc.autoTable({
+    startY: M, margin:{ left:M, right:M, top:M, bottom:M }, theme:'grid', tableWidth: W,
+    styles: Object.assign({ fontSize:8, textColor:INK, cellPadding:{top:1,bottom:1,left:1.5,right:1.5}, valign:'middle', overflow:'ellipsize' }, line),
+    columnStyles: { 0:{cellWidth:20}, 1:{cellWidth:64}, 2:{cellWidth:16}, 3:{cellWidth:44}, 4:{cellWidth:22}, 5:{cellWidth:58}, 6:{cellWidth:16}, 7:{cellWidth:W-240} },
+    body: [
+      [ { content:T(CFG.co), colSpan:4, styles:{ fontSize:12.5, fontStyle:'bold', minCellHeight:12, cellPadding:{left:16, right:1.5, top:1, bottom:1} } },
+        { content:'FIRST PART INSPECTION REPORT', colSpan:2, styles:{ fontSize:11, fontStyle:'bold', halign:'center' } },
+        L('Format'), V(CFG.fmt) ],
+      [ L('Part name'), V(h.partName, 3), L('Report no.'), V(i.reportNo), L('Date'), V(fmtDateDMY(i.date)) ],
+      [ L('Drawing no.'), V(h.drawingNo), L('Rev.'), V(h.revision), L('Customer'), V(i.customer), L('Shift'), V(i.shift) ],
+      [ L('Material'), V(h.material), L('Used on'), V(h.usedOn), L('Machine'), V(i.machine), L('Lot qty'), V(i.lotQty) ],
+      [ L('FPI reason'), V(i.reason, 3), L('Operator'), V(i.operator), L('Inspector'), V(i.inspector) ]
+    ],
+    didDrawCell: d => {
+      if(d.section === 'body' && d.row.index === 0 && d.column.index === 0){
+        try{ const lh = d.cell.height - 2; doc.addImage(LOGO, 'PNG', d.cell.x + 1.5, d.cell.y + 1, lh * 1.13, lh); }catch(e){}
+      }
+    }
+  });
+  let y = doc.lastAutoTable.finalY + 3.2;
+  doc.setFontSize(7); doc.setTextColor(...MUTED);
+  const gt = S.genTol.map(r => `${r.from} to ${r.to} mm: ±${r.tol}`).join('    ') + (S.angTol != null ? `    Angles: ±${S.angTol}°` : '');
+  doc.text('General tolerance:  ' + gt, M, y);
+  y += 1.8;
+
+  /* ---- dimension table: row height chosen so the report fits in 2 pages ---- */
+  const body = []; let lastView = null;
+  S.dims.forEach((d, r) => {
+    if(d.view && d.view !== lastView){ body.push([{ content:T(d.view), colSpan:9+N, styles:{ fillColor:GRP, fontStyle:'bold', halign:'left' } }]); lastView = d.view; }
+    const { lsl, usl, dp } = limits(d);
+    const lv = d.attr ? (d.lslTxt ?? 'Go') : (lsl===null ? 'n/a' : lsl.toFixed(dp));
+    const uv = d.attr ? (d.uslTxt ?? 'NoGo') : (usl===null ? 'n/a' : usl.toFixed(dp));
+    const res = rowResult(d);
+    const row = [
+      String(r+1), { content:T(d.feat), styles:{ halign:'left' } }, { content:T(d.text), styles: d.boxed ? { fontStyle:'bold' } : {} },
+      d.attr ? '' : T(fmtTol(d.up)), d.attr ? '' : T(fmtTol(d.lo)),
+      { content:T(lv), styles:{ textColor: (!d.attr && lsl===null) ? WARN : MUTED } },
+      { content:T(uv), styles:{ textColor: (!d.attr && usl===null) ? WARN : MUTED } },
+      { content:T(d.inst), styles:{ halign:'left' } }
+    ];
+    if(isMerged(d)){
+      const j = noteJudge(d.note);
+      row.push({ content:T(d.note||''), colSpan:N, styles: j==='ok' ? { fillColor:OKF, textColor:OKT, fontStyle:'bold' } : j==='nok' ? { fillColor:NOKF, textColor:NOKT, fontStyle:'bold' } : { fontStyle:'bold' } });
+    } else {
+      d.s.forEach(v => { const j = judge(d, v); row.push({ content:T(v), styles: j==='ok' ? { fillColor:OKF, textColor:OKT } : j==='nok' ? { fillColor:NOKF, textColor:NOKT, fontStyle:'bold' } : {} }); });
+    }
+    row.push({ content:res, styles:{ fontStyle:'bold', textColor: res==='OK' ? OKT : res==='NOK' ? NOKT : INK, fillColor: res==='NOK' ? NOKF : false } });
+    body.push(row);
+  });
+
+  // space needed after the table: decision/remarks box + signatures
+  const remarks = T(i.remarks || '');
+  doc.setFontSize(8);
+  const remLines = doc.splitTextToSize(remarks || ' ', W*0.62 - 4);
+  const remH = Math.max(14, remLines.length * 3.5 + 8);
+  const FOOT = 5, SUMMARY = remH + 16 + 2 + 3, HEADROWS = 8.5;
+  const avail = (PH - M - FOOT - y - HEADROWS) + (PH - 2*M - FOOT - HEADROWS - SUMMARY);
+  const rh = Math.max(3.2, Math.min(6.5, (avail - 6) / Math.max(1, body.length)));   // 6 mm slack for the page break
+  const fs = Math.max(5.8, Math.min(9, rh * 1.75));
+  const pad = Math.max(0.15, (rh - fs * 1.15 * 0.3528) / 2 - 0.01);   // cell height = text line + 2*pad = rh
+
+  const cw = { 0:7, 1:47, 2:31, 3:11, 4:11, 5:17, 6:17, 7:31, [8+N]:13 };
+  const sampleW = (W - Object.values(cw).reduce((a,b)=>a+b,0)) / N;
+  const colStyles = {}; Object.entries(cw).forEach(([k,v]) => colStyles[k] = { cellWidth:v }); for(let k=0;k<N;k++) colStyles[8+k] = { cellWidth:sampleW };
+
+  doc.autoTable({
+    startY: y, margin:{ left:M, right:M, top:M, bottom:M+FOOT }, theme:'grid', tableWidth:W,
+    styles: Object.assign({ fontSize:fs, textColor:INK, halign:'center', valign:'middle', overflow:'ellipsize', minCellHeight:rh, cellPadding:{ top:pad, bottom:pad, left:1, right:1 } }, line),
+    headStyles: { fillColor:HEAD, textColor:INK, fontStyle:'bold', fontSize:Math.min(fs,8), minCellHeight:4.2, cellPadding:0.6 },
+    columnStyles: colStyles,
+    head: [
+      [ {content:'Sr.', rowSpan:2}, {content:'Characteristic', rowSpan:2}, {content:'Nominal', rowSpan:2}, {content:'Tolerance', colSpan:2},
+        {content:'LSL', rowSpan:2}, {content:'USL', rowSpan:2}, {content:'Instrument', rowSpan:2}, {content:'Observed readings', colSpan:N}, {content:'Result', rowSpan:2} ],
+      [ '+', '-', ...Array.from({length:N}, (_,k) => String(k+1)) ]
+    ],
+    body, showHead:'everyPage', rowPageBreak:'avoid'
+  });
+  y = doc.lastAutoTable.finalY + 2;
+
+  /* ---- decision, remarks, signatures (kept together) ---- */
+  const need = remH + 18;
+  if(y + need > PH - M - FOOT){ doc.addPage(); y = M; }
+  const dec = S.decision || 'PENDING', decC = dec==='ACCEPTED' ? OKT : dec==='REJECTED' ? NOKT : WARN;
+  const res = S.dims.map(rowResult), nOk = res.filter(x=>x==='OK').length, nNok = res.filter(x=>x==='NOK').length;
+  doc.autoTable({
+    startY: y, margin:{ left:M, right:M, top:M, bottom:M+FOOT }, theme:'grid', tableWidth:W,
+    styles: Object.assign({ fontSize:8, textColor:INK, cellPadding:1.8, valign:'top', overflow:'linebreak' }, line),
+    columnStyles: { 0:{ cellWidth:W*0.38 }, 1:{ cellWidth:W*0.62 } },
+    body: [
+      [ { content:'', styles:{ minCellHeight:remH } }, { content:'', styles:{ minCellHeight:remH } } ],
+      [ { content:'Inspected by (QA)', styles:{ minCellHeight:16, valign:'bottom', halign:'center', textColor:MUTED } },
+        { content:'Approved by', styles:{ minCellHeight:16, valign:'bottom', halign:'center', textColor:MUTED } } ]
+    ],
+    rowPageBreak:'avoid',
+    didDrawCell: d => {
+      if(d.section!=='body' || d.row.index!==0) return;
+      const x = d.cell.x + 1.8; let yy = d.cell.y + 3.8;
+      doc.setFontSize(7.5); doc.setTextColor(...MUTED); doc.setFont('helvetica','normal');
+      if(d.column.index===0){
+        doc.text('Decision', x, yy);
+        doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(...decC); doc.text(dec, x, yy + 5.5);
+        doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...MUTED);
+        doc.text(`${nOk} OK, ${nNok} NOK, ${res.length-nOk-nNok} incomplete of ${res.length} characteristics`, x, yy + 9.5);
+      } else {
+        doc.text('Remarks', x, yy);
+        doc.setFontSize(8); doc.setTextColor(...INK);
+        doc.text(remLines, x, yy + 4);
+      }
+    }
+  });
+
+  /* ---- footer on every page ---- */
+  const pages = doc.getNumberOfPages();
+  for(let p = 1; p <= pages; p++){
+    doc.setPage(p); doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(...MUTED);
+    doc.text(`${T(i.reportNo)}  |  ${T(h.drawingNo)}  |  ${T(h.partName)}`, M, PH - M + 1);
+    doc.text(`Page ${p} of ${pages}`, PW - M, PH - M + 1, { align:'right' });
+  }
+  return doc;
+}
+
+async function downloadPdf(){
+  if(!S){ status('Open or create a report first.', 'err'); return; }
+  try{ busy(true, 'Preparing PDF'); await ensurePdfLib(); }catch(e){ busy(false); status(e.message + '. Use Print and choose "Save as PDF".', 'err'); return; }
+  busy(false);
+  let doc;
+  try{ doc = buildPdf(); }catch(e){ status('PDF failed: ' + e.message, 'err'); return; }
+  if(!doc){ status('PDF tool did not load. Use Print and choose "Save as PDF".', 'err'); return; }
+  const pages = doc.getNumberOfPages();
+  doc.save(pdfName());
+  status(`${pdfName()} downloaded (${pages} page${pages>1?'s':''}).` + (pages > 2 ? ' Too many rows to fit 2 pages; delete unused rows to shorten.' : ''), 'ok');
+}
+$('btnPdf').onclick = downloadPdf;
+
+/* ================= Settings ================= */
+$('btnSettings').onclick = () => { $('cfgUrl').value = CFG.url; $('cfgKey').value = CFG.key; $('cfgCo').value = CFG.co; $('cfgFmt').value = CFG.fmt; $('dlg').showModal(); };
+$('cfgSave').onclick = () => {
+  CFG.url = $('cfgUrl').value.trim(); CFG.key = $('cfgKey').value.trim(); CFG.co = $('cfgCo').value.trim(); CFG.fmt = $('cfgFmt').value.trim();
+  LS.set('urlOverride', CFG.url === DEFAULT_URL ? '' : CFG.url); LS.set('key', CFG.key); LS.set('co', CFG.co); LS.set('fmt', CFG.fmt);
+  $('dlg').close(); status('Settings saved.', 'ok'); refreshLists(); if(S) render();
+};
+$('cfgTest').onclick = async () => {
+  const old = {...CFG}; CFG.url = $('cfgUrl').value.trim(); CFG.key = $('cfgKey').value.trim();
+  try{ await api('ping'); alert('Connected.'); }catch(e){ alert('Failed: '+e.message); }
+  Object.assign(CFG, {url:old.url, key:old.key});
+};
+
+/* ================= Demo: TVL-299/18 (manually read, verify before use) ================= */
+$('btnDemo').onclick = () => {
+  const V = 'Vernier Caliper', M = 'Digital Micrometer', P = 'Profile Projector', B = 'Bore Gauge', H = 'Height Gauge', DG = 'Depth Gauge';
+  const rows = [
+    ['End view','Width','L','26.0',26.0,null,null,0,V],['End view','Offset (upper)','L','13.3',13.3,null,null,0,P],['End view','Offset (lower)','L','12.7',12.7,null,null,0,P],
+    ['Section A-A','Outlet thread','T','5/8" BSP-14TPI-LH',null,null,null,0,'Thread Ring Gauge'],['Section A-A','Internal thread','T','M16x1',null,null,null,0,'Thread Plug Gauge'],
+    ['Section A-A','Bore dia','D','Ø11.0',11.0,null,null,0,B],['Section A-A','Depth','L','4.6',4.6,null,null,1,DG],['Section A-A','Depth','L','9.7',9.7,null,null,0,DG],
+    ['Section A-A','Length','L','13.8',13.8,null,null,0,V],['Section A-A','Length','L','20.0',20.0,null,null,0,H],['Section A-A','Step','L','4.0',4.0,null,null,1,P],
+    ['Section A-A','Step','L','3.3',3.3,null,null,1,P],['Section A-A','Angle','A','20°',20,null,null,0,P],['Section A-A','Bore dia','D','Ø20.0',20.0,null,null,1,B],
+    ['Section A-A','Groove position','L','1.93',1.93,null,null,0,P],['Section A-A','Groove position','L','1.93',1.93,null,null,0,P],['Section A-A','Groove position','L','3.53',3.53,null,null,0,P],
+    ['Section A-A','Length','L','12.5',12.5,null,null,1,H],['Section A-A','Step','L','1.4',1.4,null,null,1,P],['Section A-A','Length','L','9.2',9.2,null,null,0,V],
+    ['Section A-A','Bore dia','D','Ø16.0',16.0,0.1,-0.1,0,B],['Section A-A','Dia','D','Ø21.5',21.5,null,null,0,V],['Section A-A','Dia','D','Ø23.0',23.0,null,null,1,V],
+    ['Section A-A','Dia','D','Ø25.4',25.4,null,null,0,M],['Section A-A','Step','L','3.1',3.1,null,null,0,P],
+    ['Section A-A','ACME thread','T','1-1/4"-5 ACME-2G RH EXT CGA 790 V-1',null,null,null,0,'Thread Ring Gauge'],
+    ['Front view','Collar OD','D','Ø30.0',30.0,null,null,0,M],['Front view','Dia','D','Ø20.4',20.4,null,null,0,M],['Front view','Dia','D','Ø20.0',20.0,null,null,0,M],
+    ['Front view','Groove dia','D','Ø18.2',18.2,null,null,0,V],['Front view','Length','L','7.0',7.0,null,null,0,V],['Front view','Chamfer','L','2.0',2.0,null,null,0,P],
+    ['Front view','Groove width','L','3.3',3.3,null,null,0,P],['Front view','Length','L','12.4',12.4,null,null,0,V],['Front view','Width','L','2.3',2.3,null,null,0,P],
+    ['Front view','Length','L','23.7',23.7,null,null,0,H],['Front view','Overall length','L','43.3',43.3,null,null,0,V],['Front view','Length','L','16.3',16.3,null,null,0,V],
+    ['Front view','Thread length','L','14.6',14.6,null,null,0,V],['Front view','Length','L','5.0',5.0,null,null,0,V],['Front view','Length','L','19.6',19.6,null,null,0,V],
+    ['Detail AA','Dia','D','Ø8.3',8.3,null,null,0,P],['Detail AA','Seat dia','D','Ø6.3',6.3,0.10,-0.02,0,'Pin Gauge'],['Detail AA','Radius','R','R0.3',0.3,null,null,0,'Radius Gauge'],
+    ['Detail AA','Angle','A','30°',30,null,null,0,P],['Detail AA','Depth','L','0.9',0.9,null,null,0,P],
+    ['Threading details','ACME pitch','L','5.08',5.08,null,null,0,P],['Threading details','Thread flat','L','1.8',1.8,null,null,0,P],['Threading details','Thread flat','L','1.8',1.8,null,null,0,P],
+    ['Threading details','Thread angle','A','29°',29,null,null,0,P],['Threading details','Minor dia (min)','D','Ø26.162',26.162,null,null,0,V],
+    ['Threading details','Pitch dia','D','Ø28.984',28.984,null,null,0,'3-Wire / Thread Micrometer'],['Threading details','Major dia','D','Ø31.750',31.750,null,null,0,M]
+  ];
+  loadData({
+    header:{partName:'LOT VALVE ADAPTOR (OUTLET CARTRIDGE)', drawingNo:'TVL-299/18', revision:'', material:'BRASS', usedOn:'LOT VALVE'},
+    genTol: DEF_GENTOL, angTol:null,
+    dims: rows.map(r => ({view:r[0],feat:r[1],type:r[2],text:r[3],nom:r[4],up:r[5],lo:r[6],boxed:!!r[7],inst:r[8]}))
+  });
+  status('Demo loaded: TVL-299/18, '+S.dims.length+' dimensions. Verify, then Save list.', 'ok');
+};
+
+$('brandLogo').src = LOGO;
+(() => { const m = readCache('cacheM'), r = readCache('cacheR'); if(m) fillMasters(m); if(r) fillReports(r); })();
+refreshLists();
+setTimeout(() => ensurePdfLib().catch(() => {}), 3000);   // warm PDF library in background
+if(!CFG.url) status('Open Settings and paste your Apps Script URL.');
+</script>
+</body>
+</html>
