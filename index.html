@@ -984,7 +984,9 @@ $('btnSave').onclick = async () => {
     const rows = S.dims.map((d, r) => { const {lsl, usl} = limits(d);
       return { no:r+1, feat:d.feat, spec: d.text + (d.attr?'':` ${fmtTol(d.up)}/${fmtTol(d.lo)}`), lsl: d.attr ? (d.lslTxt ?? 'Go') : (lsl??''), usl: d.attr ? (d.uslTxt ?? 'NoGo') : (usl??''), inst:d.inst, s: isMerged(d) ? [d.note||'','','','',''] : d.s, result: rowResult(d) }; });
     const state = { header:S.header, genTol:S.genTol, angTol:S.angTol, info:S.info, dims:S.dims };
-    const r = await api('saveReport', { report:{ info:S.info, header:S.header, rows, decision:S.decision, state } });
+    const repObj = { info:S.info, header:S.header, rows, decision:S.decision, state };
+    keepLocal(S.info.reportNo, JSON.parse(JSON.stringify(repObj)));
+    const r = await api('saveReport', { report: repObj });
     status(`${r.reportNo} saved (${r.rows} rows, ${r.nok} NOK). Find it under Saved reports.`, 'ok');
     await loadReports(r.reportNo);
   }catch(e){ status(e.message, 'err'); }
@@ -1045,8 +1047,18 @@ function stateFromRows(rep){
   return { header:rep.header||{}, genTol:DEF_GENTOL, angTol:null, info:rep.info||newInfo(), dims };
 }
 
+function keepLocal(no, rep){
+  try{
+    LS.set('rep:' + no, JSON.stringify(rep));
+    const idx = JSON.parse(LS.get('repIdx','[]')).filter(x => x !== no); idx.unshift(no);
+    idx.slice(40).forEach(x => { try{ localStorage.removeItem('tvlfpi_rep:' + x); }catch(e){} });
+    LS.set('repIdx', JSON.stringify(idx.slice(0, 40)));
+  }catch(e){}
+}
 async function openReport(no){
-  const rep = await api('getReport', {reportNo: no});
+  let rep = null;
+  try{ rep = JSON.parse(LS.get('rep:' + no, 'null')); }catch(e){}
+  if(!rep){ rep = await api('getReport', {reportNo: no}); if(rep && typeof rep === 'object') keepLocal(no, rep); }
   if(!rep || typeof rep !== 'object') throw new Error('Report ' + no + ' could not be read from the sheet. Update Code.gs to the latest version and Deploy > Manage deployments > New version.');
   const st = rep.state || stateFromRows(rep);
   S = {
